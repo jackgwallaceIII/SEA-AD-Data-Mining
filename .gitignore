@@ -1,2 +1,4 @@
 *.h5ad
 seaad_data/
+__pycache__/
+*.pyc
