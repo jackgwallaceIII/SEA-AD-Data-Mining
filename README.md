@@ -1,10 +1,16 @@
 # SEA-AD TRAPPC9 Analysis
 
-Exploratory analysis of TRAPPC9 expression across Alzheimer's disease severity in the SEA-AD hippocampus single-nucleus RNA-seq dataset.
+Exploratory analysis of TRAPPC9 expression across Alzheimer's disease severity and brain regions in the SEA-AD single-nucleus RNA-seq dataset, with genetic validation via MAGMA cell type enrichment.
 
 ## Background
 
-TRAPPC9 was discovered/characterized in part by Dr. Wenhui Hu's lab and is of interest for a potential role in Alzheimer's disease pathogenesis. This is an exploratory side project investigating whether TRAPPC9 expression varies with AD neuropathological severity (ADNC) in microglia and astrocytes.
+TRAPPC9 was discovered/characterized in part by Dr. Wenhui Hu's lab and is of interest for a potential role in Alzheimer's disease pathogenesis. This is an exploratory side project investigating whether TRAPPC9 expression varies with AD neuropathological severity (ADNC) in microglia and astrocytes across multiple brain regions.
+
+Our analysis has two complementary aims:
+
+1. **Expression analysis (Steps 1–2):** Does TRAPPC9 expression in microglia and astrocytes change with increasing AD neuropathological severity (ADNC), and is this consistent across brain regions?
+
+2. **Genetic validation (Step 3):** Are the cell types showing TRAPPC9 expression changes also genetically implicated in AD risk? We address this using MAGMA cell type enrichment — a method that tests whether genes specifically expressed in a given cell type (e.g. microglia) are genome-wide enriched for variants associated with AD in a large GWAS. This is **not** a test of whether TRAPPC9 itself is a GWAS hit; rather, it asks whether the *cell types* we are focused on are the right biological context for AD genetics. If microglia and/or astrocytes show significant MAGMA enrichment for AD risk, it provides independent genetic evidence that those cell types are centrally involved in AD pathogenesis — strengthening the rationale for studying TRAPPC9 in those specific populations.
 
 ## Dataset
 
@@ -47,12 +53,18 @@ TRAPPC9 was discovered/characterized in part by Dr. Wenhui Hu's lab and is of in
 
 ### Step 3: MAGMA cell type enrichment (R)
 `step3_MAGMA_celltyping.R`
+
+**What it tests:** Whether the cell types showing TRAPPC9 expression changes in AD (microglia and astrocytes) are also independently implicated in AD genetic risk. MAGMA cell type enrichment works by computing a *specificity score* for each gene in each cell type — how exclusively that gene is expressed in that cell type compared to all others — and then testing genome-wide whether the genes most specific to a given cell type are enriched for AD GWAS signal. A significant result for microglia, for example, means that AD risk variants cluster in genes that are preferentially expressed in microglia, which is genetic evidence that microglia are a key cell type in AD biology.
+
+**Why this matters for TRAPPC9:** If microglia and astrocytes show significant MAGMA enrichment, it validates that our focus on TRAPPC9 in those cell types is biologically well-grounded. Conversely, finding enrichment in a cell type where TRAPPC9 expression does *not* change with AD severity would suggest we may be missing something.
+
+**What it does:**
 - Downloads the MAGMA binary automatically via `MAGMA.Celltyping::get_magma()`
-- Downloads Bellenguez et al. 2022 AD GWAS summary statistics (GCST90027158) from the GWAS Catalog
+- Downloads Bellenguez et al. 2022 AD GWAS summary statistics (GCST90027158, ~1 million variants, the largest AD GWAS to date) from the GWAS Catalog
 - Maps GWAS SNPs to genes using MAGMA (1000 Genomes EUR reference panel, GRCh38)
-- Builds a CellTypeData (CTD) specificity object from each SEA-AD brain region
+- Builds a CellTypeData (CTD) specificity object for each SEA-AD brain region from the step 1 outputs
 - Runs linear MAGMA enrichment tests per cell type across all 11 brain regions
-- Outputs per-region results tables and PDFs, plus a combined cross-region heatmap in `results/MAGMA/`
+- Outputs per-region results tables and bar chart PDFs, plus a combined cross-region heatmap in `results/MAGMA/`
 
 ### Additional analysis scripts (in `src/`)
 - `step3_TRAPPC9_boxplot.R` — Control vs AD boxplots (pooled and by cell type)
