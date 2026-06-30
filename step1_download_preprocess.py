@@ -4,17 +4,17 @@
 SEA-AD TRAPPC9 Analysis Pipeline — Step 1: Download & Preprocess
 =============================================================================
 Dataset : Seattle Alzheimer's Disease Brain Cell Atlas (SEA-AD)
-Region  : Hippocampus
+Regions : Any combination of the 11 SEA-AD brain regions (see REGIONS below)
 Source  : s3://sea-ad-single-cell-profiling/ (public, no AWS account needed)
 
-What this script does:
-  1. Downloads the SEA-AD Hippocampus snRNA-seq h5ad from AWS S3
+What this script does, for each region in REGIONS_TO_PROCESS:
+  1. Downloads the SEA-AD snRNA-seq h5ad for that region from AWS S3
   2. Removes "Reference" donors (5 young donors used only for cell type mapping)
-  3. Subsets the AnnData to cells of interest and key metadata columns
+  3. Subsets the AnnData to key metadata columns
   4. Saves a compact h5ad that R can load without the 2^32 integer overflow issue
 
-IMPORTANT: The full dataset has >2^32 non-zero matrix elements, which exceeds
-R's 32-bit integer limit. This step produces a smaller file that loads fine in R.
+IMPORTANT: The full datasets have >2^32 non-zero matrix elements, which exceeds
+R's 32-bit integer limit. This step produces smaller files that load fine in R.
 (See: https://community.brain-map.org/t/sea-ad-snrnaseq-dataset-format/3454)
 
 Requirements (install with pip):
@@ -24,7 +24,7 @@ Run:
     python step1_download_preprocess.py
 
 Output:
-    seaad_data/SEAAD_HIP_subset_for_R.h5ad
+    seaad_data/<REGION_CODE>/SEAAD_<REGION_CODE>_subset_for_R.h5ad
 =============================================================================
 """
 
@@ -42,25 +42,98 @@ import scipy.sparse as sp
 # CONFIGURATION — adjust if needed
 # ---------------------------------------------------------------------------
 
-REGION      = "Hippocampus"
-REGION_CODE = "HIP"
-OUTPUT_DIR  = "seaad_data"
+OUTPUT_DIR = "seaad_data"
 
-# The SEA-AD team releases updated h5ad files periodically.
-# The script tries these dates in order until it finds a valid file.
-# Browse https://sea-ad-single-cell-profiling.s3.amazonaws.com/index.html#Hippocampus/RNAseq/
-# to find the latest filename and add it here if needed.
-CANDIDATE_DATES = [
-    "2026-06-22",
-    "2024-02-13",
-    "2023-05-05",
-    "2022-08-18",
-]
+# Each entry describes how to locate that region's h5ad on S3.
+#   folder              : top-level S3 prefix for the region
+#   subdir               : sub-prefix under the folder (most regions use "RNAseq")
+#   filename_template    : filename pattern, with {code} and {date} placeholders
+#   candidate_dates       : dates to try, newest first
+#
+# Most regions follow the standard SEA-AD naming convention:
+#   <folder>/RNAseq/SEAAD_<code>_RNAseq_final-nuclei.<date>.h5ad
+#
+# Two regions are irregular on the S3 bucket as of this writing:
+#   - PFC:  the bucket folder is "PFC" but the files inside still use the
+#           legacy region code "DFC" (Dorsolateral Frontal Cortex).
+#   - Caudate_Nucleus: has no "RNAseq" subdir and uses a different filename
+#           pattern entirely ("CaH_all_nuclei.<date>.h5ad").
+STANDARD_DATES = ["2026-06-22", "2024-02-13", "2023-05-05", "2022-08-18"]
 
-BASE_URL = (
-    f"https://sea-ad-single-cell-profiling.s3.amazonaws.com"
-    f"/{REGION_CODE}/RNAseq"
-)
+REGIONS = {
+    "HIP": {
+        "name": "Hippocampus",
+        "folder": "HIP", "code": "HIP", "subdir": "RNAseq",
+        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
+        "candidate_dates": STANDARD_DATES,
+    },
+    "MEC": {
+        "name": "Medial entorhinal cortex",
+        "folder": "MEC", "code": "MEC", "subdir": "RNAseq",
+        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
+        "candidate_dates": STANDARD_DATES,
+    },
+    "LEC": {
+        "name": "Lateral entorhinal cortex",
+        "folder": "LEC", "code": "LEC", "subdir": "RNAseq",
+        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
+        "candidate_dates": STANDARD_DATES,
+    },
+    "ITG": {
+        "name": "Inferior temporal gyrus",
+        "folder": "ITG", "code": "ITG", "subdir": "RNAseq",
+        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
+        "candidate_dates": STANDARD_DATES,
+    },
+    "MTG": {
+        "name": "Middle temporal gyrus",
+        "folder": "MTG", "code": "MTG", "subdir": "RNAseq",
+        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
+        "candidate_dates": STANDARD_DATES + ["2022-06-07"],
+    },
+    "STG": {
+        "name": "Superior temporal gyrus",
+        "folder": "STG", "code": "STG", "subdir": "RNAseq",
+        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
+        "candidate_dates": STANDARD_DATES,
+    },
+    "FI": {
+        "name": "Frontal insula",
+        "folder": "FI", "code": "FI", "subdir": "RNAseq",
+        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
+        "candidate_dates": STANDARD_DATES,
+    },
+    "PFC": {
+        "name": "Prefrontal cortex",
+        "folder": "PFC", "code": "DFC", "subdir": "RNAseq",
+        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
+        "candidate_dates": STANDARD_DATES,
+    },
+    "AnG": {
+        "name": "Angular gyrus",
+        "folder": "AnG", "code": "AnG", "subdir": "RNAseq",
+        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
+        "candidate_dates": STANDARD_DATES,
+    },
+    "V1C": {
+        "name": "Primary visual cortex",
+        "folder": "V1C", "code": "V1C", "subdir": "RNAseq",
+        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
+        "candidate_dates": STANDARD_DATES,
+    },
+    "Caudate_Nucleus": {
+        "name": "Caudate Nucleus (head of the caudate)",
+        "folder": "Caudate_Nucleus", "code": "CaH", "subdir": "",
+        "filename_template": "CaH_all_nuclei.{date}.h5ad",
+        "candidate_dates": ["2025-12-29"],
+    },
+}
+
+# Which regions to actually download & process. Defaults to all of them;
+# trim this list to run a subset (e.g. ["HIP", "PFC"]).
+REGIONS_TO_PROCESS = list(REGIONS.keys())
+
+S3_BUCKET = "https://sea-ad-single-cell-profiling.s3.amazonaws.com"
 
 # Metadata columns to keep (everything else is dropped to reduce file size)
 # Rename map: {original_col_name: short_name_for_R}
@@ -99,22 +172,22 @@ def url_exists(url: str, timeout: int = 15) -> bool:
         return False
 
 
-def find_download_url() -> str:
-    """Try each candidate date and return the first working URL."""
-    for date in CANDIDATE_DATES:
-        fname = f"SEAAD_{REGION_CODE}_RNAseq_final-nuclei.{date}.h5ad"
-        url   = f"{BASE_URL}/{fname}"
+def find_download_url(region_key: str, cfg: dict) -> tuple:
+    """Try each candidate date for a region and return the first working URL."""
+    base_url = "/".join(p for p in (S3_BUCKET, cfg["folder"], cfg["subdir"]) if p)
+    for date in cfg["candidate_dates"]:
+        fname = cfg["filename_template"].format(code=cfg["code"], date=date)
+        url = f"{base_url}/{fname}"
         print(f"  Checking {url} ...", end=" ", flush=True)
         if url_exists(url):
             print("FOUND")
             return url, fname
         print("not found")
     raise FileNotFoundError(
-        "\n\nCould not find a valid Hippocampus h5ad on S3.\n"
+        f"\n\nCould not find a valid {cfg['name']} ({region_key}) h5ad on S3.\n"
         "Browse the bucket index to find the correct filename:\n"
-        "  https://sea-ad-single-cell-profiling.s3.amazonaws.com"
-        "/index.html#Hippocampus/RNAseq/\n"
-        "Then add that date string to CANDIDATE_DATES at the top of this script."
+        f"  {S3_BUCKET}/index.html#{cfg['folder']}/\n"
+        "Then add that date string to the region's candidate_dates in REGIONS."
     )
 
 
@@ -134,19 +207,21 @@ def download_with_progress(url: str, dest: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# MAIN
+# PER-REGION PIPELINE
 # ---------------------------------------------------------------------------
 
-def main():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+def process_region(region_key: str) -> None:
+    cfg = REGIONS[region_key]
+    region_dir = os.path.join(OUTPUT_DIR, region_key)
+    os.makedirs(region_dir, exist_ok=True)
 
     # ---- 1. Find & download ------------------------------------------------
     print("=" * 70)
-    print("Step 1a: Locating SEA-AD Hippocampus h5ad on AWS S3")
+    print(f"Step 1a [{region_key}]: Locating {cfg['name']} h5ad on AWS S3")
     print("=" * 70)
 
-    url, fname = find_download_url()
-    local_h5ad = os.path.join(OUTPUT_DIR, fname)
+    url, fname = find_download_url(region_key, cfg)
+    local_h5ad = os.path.join(region_dir, fname)
 
     if os.path.exists(local_h5ad):
         print(f"File already exists locally: {local_h5ad}")
@@ -156,10 +231,10 @@ def main():
 
     # ---- 2. Load in backed (disk-backed) mode to avoid RAM overflow --------
     print("\n" + "=" * 70)
-    print("Step 1b: Loading AnnData in backed mode")
+    print(f"Step 1b [{region_key}]: Loading AnnData in backed mode")
     print("=" * 70)
     adata = sc.read_h5ad(local_h5ad, backed="r")
-    print(f"  Shape: {adata.n_obs:,} cells × {adata.n_vars:,} genes")
+    print(f"  Shape: {adata.n_obs:,} cells x {adata.n_vars:,} genes")
 
     # ---- 3. Inspect metadata -----------------------------------------------
     print("\n--- Metadata preview ---")
@@ -204,7 +279,7 @@ def main():
 
     # ---- 5. Filter cells ---------------------------------------------------
     print("\n" + "=" * 70)
-    print("Step 1c: Filtering cells")
+    print(f"Step 1c [{region_key}]: Filtering cells")
     print("=" * 70)
 
     if adnc_col:
@@ -220,7 +295,7 @@ def main():
     # ---- 6. Load subset into memory ----------------------------------------
     print("\n  Loading filtered subset into memory...")
     adata_sub = adata_filt.to_memory()
-    print(f"  Subset shape: {adata_sub.n_obs:,} × {adata_sub.n_vars:,}")
+    print(f"  Subset shape: {adata_sub.n_obs:,} x {adata_sub.n_vars:,}")
 
     # ---- 7. Set counts matrix to raw UMIs (needed for DE in R) -------------
     if "UMIs" in adata_sub.layers:
@@ -238,6 +313,7 @@ def main():
         print(f"  NOTE: these columns were not found and will be skipped: {missing}")
 
     adata_sub.obs = adata_sub.obs[list(present.keys())].rename(columns=present)
+    adata_sub.obs["Region"] = region_key
 
     # Ensure ADNC has tidy name in renamed obs
     adnc_new = present.get(adnc_col, "ADNC") if adnc_col else "ADNC"
@@ -259,25 +335,45 @@ def main():
 
     # Remove varm, uns (not needed)
     adata_sub.varm = {}
-    adata_sub.uns  = {}
+    adata_sub.uns = {}
 
     # ---- 10. Save ----------------------------------------------------------
-    out_path = os.path.join(OUTPUT_DIR, "SEAAD_HIP_subset_for_R.h5ad")
+    out_path = os.path.join(region_dir, f"SEAAD_{region_key}_subset_for_R.h5ad")
     print(f"\n  Saving subset to: {out_path}")
     adata_sub.write_h5ad(out_path, compression="gzip")
     print(f"  Done! File size: {os.path.getsize(out_path) / 1e9:.2f} GB")
 
     print("\n" + "=" * 70)
-    print("Step 1 complete!")
+    print(f"Step 1 complete for {region_key}!")
     print(f"  Output: {out_path}")
-    print("  Next: open step2_TRAPPC9_seurat_analysis.R in RStudio")
     print("=" * 70)
 
     # Print final obs column summary for R user
-    print("\nMetadata columns in output h5ad (obs):")
+    print(f"\nMetadata columns in output h5ad (obs) for {region_key}:")
     for col in adata_sub.obs.columns:
         print(f"  {col}: {adata_sub.obs[col].dtype}  "
               f"  unique={adata_sub.obs[col].nunique()}")
+
+
+# ---------------------------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------------------------
+
+def main():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    unknown = [r for r in REGIONS_TO_PROCESS if r not in REGIONS]
+    if unknown:
+        raise ValueError(f"Unknown region(s) in REGIONS_TO_PROCESS: {unknown}. "
+                          f"Valid options: {list(REGIONS.keys())}")
+
+    for region_key in REGIONS_TO_PROCESS:
+        process_region(region_key)
+
+    print("\n" + "=" * 70)
+    print(f"All regions processed: {REGIONS_TO_PROCESS}")
+    print("  Next: open step2_TRAPPC9_seurat_analysis.R in RStudio")
+    print("=" * 70)
 
 
 if __name__ == "__main__":
