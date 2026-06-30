@@ -18,7 +18,7 @@ R's 32-bit integer limit. This step produces smaller files that load fine in R.
 (See: https://community.brain-map.org/t/sea-ad-snrnaseq-dataset-format/3454)
 
 Requirements (install with pip):
-    pip install scanpy anndata numpy pandas scipy
+    pip install anndata numpy pandas scipy h5py
 
 Run:
     python step1_download_preprocess.py
@@ -33,10 +33,25 @@ import sys
 import urllib.request
 import urllib.error
 
+import h5py
 import numpy as np
 import pandas as pd
-import scanpy as sc
+import anndata as ad
 import scipy.sparse as sp
+
+# read_elem / sparse_dataset moved between anndata.experimental and anndata.io
+# across versions — try the modern locations first, fall back to older ones.
+try:
+    from anndata import read_elem
+except ImportError:
+    from anndata.experimental import read_elem
+try:
+    from anndata import sparse_dataset
+except ImportError:
+    try:
+        from anndata.io import sparse_dataset
+    except ImportError:
+        from anndata.experimental import sparse_dataset
 
 # ---------------------------------------------------------------------------
 # CONFIGURATION — adjust if needed
@@ -229,42 +244,54 @@ def process_region(region_key: str) -> None:
     else:
         download_with_progress(url, local_h5ad)
 
-    # ---- 2. Load in backed (disk-backed) mode to avoid RAM overflow --------
+    # ---- 2. Open the h5ad without eagerly loading large non-X groups -------
+    # anndata's high-level `read_h5ad(..., backed="r")` only defers loading
+    # of X — it still eagerly reads obsm/varm/obsp/varp/uns/layers in full,
+    # which OOMs on regions whose raw-UMI layer is tens of GB. We instead
+    # open the file with h5py directly and only build lazy (disk-backed)
+    # handles for X and layers/UMIs, materializing rows only after filtering.
     print("\n" + "=" * 70)
-    print(f"Step 1b [{region_key}]: Loading AnnData in backed mode")
+    print(f"Step 1b [{region_key}]: Opening h5ad (lazy, X/UMIs not yet loaded)")
     print("=" * 70)
-    adata = sc.read_h5ad(local_h5ad, backed="r")
-    print(f"  Shape: {adata.n_obs:,} cells x {adata.n_vars:,} genes")
+    h5file = h5py.File(local_h5ad, "r")
+    obs = read_elem(h5file["obs"])
+    var = read_elem(h5file["var"])
+    X_backed = sparse_dataset(h5file["X"])
+    umis_backed = None
+    if "layers" in h5file and "UMIs" in h5file["layers"]:
+        umis_backed = sparse_dataset(h5file["layers"]["UMIs"])
+    n_obs, n_vars = X_backed.shape
+    print(f"  Shape: {n_obs:,} cells x {n_vars:,} genes")
 
     # ---- 3. Inspect metadata -----------------------------------------------
     print("\n--- Metadata preview ---")
-    print(f"obs columns: {list(adata.obs.columns)}")
+    print(f"obs columns: {list(obs.columns)}")
 
     adnc_col = "Overall AD Neuropathological Change"
-    if adnc_col in adata.obs.columns:
-        print(f"\nADNC distribution:\n{adata.obs[adnc_col].value_counts()}")
+    if adnc_col in obs.columns:
+        print(f"\nADNC distribution:\n{obs[adnc_col].value_counts()}")
     else:
         # Column may have a slightly different name — search for it
-        candidates = [c for c in adata.obs.columns if "neuropath" in c.lower() or "adnc" in c.lower()]
+        candidates = [c for c in obs.columns if "neuropath" in c.lower() or "adnc" in c.lower()]
         if candidates:
             adnc_col = candidates[0]
             print(f"  ADNC column found as: '{adnc_col}'")
-            print(adata.obs[adnc_col].value_counts())
+            print(obs[adnc_col].value_counts())
         else:
             print("  WARNING: ADNC column not found — check obs columns above and update adnc_col.")
             adnc_col = None
 
-    if "Subclass" in adata.obs.columns:
-        print(f"\nSubclass distribution:\n{adata.obs['Subclass'].value_counts()}")
+    if "Subclass" in obs.columns:
+        print(f"\nSubclass distribution:\n{obs['Subclass'].value_counts()}")
 
     # ---- 4. Check TRAPPC9 is present (cheap: just check var_names) --------
     print(f"\n--- {GENE_OF_INTEREST} check ---")
-    if GENE_OF_INTEREST in adata.var_names:
+    if GENE_OF_INTEREST in var.index:
         print(f"  {GENE_OF_INTEREST} found in var_names "
               f"(expression count will be reported after subsetting).")
     else:
         print(f"  WARNING: {GENE_OF_INTEREST} not in gene names.")
-        partial = [g for g in adata.var_names if "TRAPPC9" in g.upper()]
+        partial = [g for g in var.index if "TRAPPC9" in str(g).upper()]
         if partial:
             print(f"  Possible matches: {partial}")
         else:
@@ -276,18 +303,25 @@ def process_region(region_key: str) -> None:
     print("=" * 70)
 
     if adnc_col:
-        mask = adata.obs[adnc_col].isin(ADNC_KEEP)
+        mask = obs[adnc_col].isin(ADNC_KEEP)
         print(f"  Keeping ADNC in {ADNC_KEEP}")
         print(f"  Cells retained: {mask.sum():,} / {len(mask):,}")
-        # Backed AnnData supports boolean indexing
-        adata_filt = adata[mask.values]
     else:
         print("  WARNING: skipping ADNC filter (column not found)")
-        adata_filt = adata
+        mask = pd.Series(True, index=obs.index)
 
-    # ---- 6. Load subset into memory ----------------------------------------
-    print("\n  Loading filtered subset into memory...")
-    adata_sub = adata_filt.to_memory()
+    mask_arr = mask.to_numpy()
+
+    # ---- 6. Read only the filtered rows into memory -------------------------
+    # Row-slicing a backed sparse dataset reads just the requested rows from
+    # disk, so this only pulls in the cells that survived the ADNC filter.
+    print("\n  Reading filtered subset from disk (row-sliced, not full matrix)...")
+    X_sub = X_backed[mask_arr]
+    obs_sub = obs[mask_arr]
+    adata_sub = ad.AnnData(X=X_sub, obs=obs_sub, var=var.copy())
+    if umis_backed is not None:
+        adata_sub.layers["UMIs"] = umis_backed[mask_arr]
+    h5file.close()
     print(f"  Subset shape: {adata_sub.n_obs:,} x {adata_sub.n_vars:,}")
 
     if GENE_OF_INTEREST in adata_sub.var_names:

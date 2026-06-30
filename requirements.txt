@@ -2,4 +2,4 @@ numpy
 pandas
 scipy
 anndata
-scanpy
+h5py
