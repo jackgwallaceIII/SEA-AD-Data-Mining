@@ -1,0 +1,9 @@
+"CellType","ADNC","n_cells","n_expressing","pct_expressing","mean_expr","median_expr"
+"Astrocyte","Not AD",2366,1482,62.64,0.8676,0.9602
+"Astrocyte","Low",3329,2051,61.61,0.877,0.9838
+"Astrocyte","Intermediate",4480,2381,53.15,0.7781,0.7069
+"Astrocyte","High",13661,9007,65.93,0.9096,1.0011
+"Immune","Not AD",1111,751,67.6,1.2556,1.4717
+"Immune","Low",2055,1303,63.41,1.0642,1.2079
+"Immune","Intermediate",2718,1687,62.07,1.1036,1.25
+"Immune","High",8306,5711,68.76,1.1988,1.3744
