@@ -257,18 +257,11 @@ def process_region(region_key: str) -> None:
     if "Subclass" in adata.obs.columns:
         print(f"\nSubclass distribution:\n{adata.obs['Subclass'].value_counts()}")
 
-    # ---- 4. Check TRAPPC9 --------------------------------------------------
+    # ---- 4. Check TRAPPC9 is present (cheap: just check var_names) --------
     print(f"\n--- {GENE_OF_INTEREST} check ---")
     if GENE_OF_INTEREST in adata.var_names:
-        gene_idx = list(adata.var_names).index(GENE_OF_INTEREST)
-        # Read just this gene column (backed mode allows slicing)
-        col = adata.X[:, gene_idx]
-        if sp.issparse(col):
-            n_expr = (col > 0).sum()
-        else:
-            n_expr = (np.array(col) > 0).sum()
-        pct = n_expr / adata.n_obs * 100
-        print(f"  {GENE_OF_INTEREST} detected in {n_expr:,} / {adata.n_obs:,} cells ({pct:.2f}%)")
+        print(f"  {GENE_OF_INTEREST} found in var_names "
+              f"(expression count will be reported after subsetting).")
     else:
         print(f"  WARNING: {GENE_OF_INTEREST} not in gene names.")
         partial = [g for g in adata.var_names if "TRAPPC9" in g.upper()]
@@ -296,6 +289,14 @@ def process_region(region_key: str) -> None:
     print("\n  Loading filtered subset into memory...")
     adata_sub = adata_filt.to_memory()
     print(f"  Subset shape: {adata_sub.n_obs:,} x {adata_sub.n_vars:,}")
+
+    if GENE_OF_INTEREST in adata_sub.var_names:
+        gene_idx = adata_sub.var_names.get_loc(GENE_OF_INTEREST)
+        col = adata_sub.X[:, gene_idx]
+        n_expr = (col > 0).sum() if sp.issparse(col) else (np.array(col) > 0).sum()
+        pct = n_expr / adata_sub.n_obs * 100 if adata_sub.n_obs else 0
+        print(f"  {GENE_OF_INTEREST} detected in {n_expr:,} / {adata_sub.n_obs:,} "
+              f"retained cells ({pct:.2f}%)")
 
     # ---- 7. Set counts matrix to raw UMIs (needed for DE in R) -------------
     if "UMIs" in adata_sub.layers:
