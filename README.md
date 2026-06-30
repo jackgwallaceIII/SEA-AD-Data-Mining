@@ -45,7 +45,16 @@ TRAPPC9 was discovered/characterized in part by Dr. Wenhui Hu's lab and is of in
 - Runs Wilcoxon tests (cell-level, Control vs High AD) and Jonckheere-Terpstra trend tests (across ADNC severity gradient)
 - Runs donor-level pseudobulk DESeq2 differential expression
 
-### Additional analysis scripts
+### Step 3: MAGMA cell type enrichment (R)
+`step3_MAGMA_celltyping.R`
+- Downloads the MAGMA binary automatically via `MAGMA.Celltyping::get_magma()`
+- Downloads Bellenguez et al. 2022 AD GWAS summary statistics (GCST90027158) from the GWAS Catalog
+- Maps GWAS SNPs to genes using MAGMA (1000 Genomes EUR reference panel, GRCh38)
+- Builds a CellTypeData (CTD) specificity object from each SEA-AD brain region
+- Runs linear MAGMA enrichment tests per cell type across all 11 brain regions
+- Outputs per-region results tables and PDFs, plus a combined cross-region heatmap in `results/MAGMA/`
+
+### Additional analysis scripts (in `src/`)
 - `step3_TRAPPC9_boxplot.R` — Control vs AD boxplots (pooled and by cell type)
 - `step4_TRAPPC9_ADNC_gradient.R` — expression trends across the full ADNC severity gradient
 - `step5_violin_with_points.R` — violin plots with overlaid jittered points and p-values
@@ -64,7 +73,11 @@ These results should be interpreted as hypothesis-generating preliminary data ra
 
 **Python:** anndata, h5py, numpy, pandas, scipy (see `requirements.txt`)
 
-**R:** Seurat, zellkonverter, SingleCellExperiment, rhdf5, DESeq2, ggplot2, ggpubr, dplyr, clinfun
+**R (steps 1–2):** Seurat, zellkonverter, SingleCellExperiment, rhdf5, DESeq2, ggplot2, ggpubr, dplyr, clinfun
+
+**R (step 3 — MAGMA):** MAGMA.Celltyping, EWCE, zellkonverter, SingleCellExperiment, ggplot2, dplyr, data.table, patchwork
+
+**MAGMA binary:** downloaded automatically by `step3_MAGMA_celltyping.R` via `MAGMA.Celltyping::get_magma()`. Windows users can also manually download from https://ctg.cncr.nl/software/magma
 
 ## Usage
 
