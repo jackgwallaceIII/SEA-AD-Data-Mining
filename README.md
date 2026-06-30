@@ -62,7 +62,7 @@ These results should be interpreted as hypothesis-generating preliminary data ra
 
 ## Requirements
 
-**Python:** scanpy, anndata, numpy, pandas, scipy (see `requirements.txt`)
+**Python:** anndata, h5py, numpy, pandas, scipy (see `requirements.txt`)
 
 **R:** Seurat, zellkonverter, SingleCellExperiment, rhdf5, DESeq2, ggplot2, ggpubr, dplyr, clinfun
 
