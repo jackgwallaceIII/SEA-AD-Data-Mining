@@ -207,7 +207,7 @@ Idents(seu) <- CELLTYPE_COL
 message("  ADNC distribution:")
 print(table(seu$ADNC))
 message("\n  Cell type distribution (", CELLTYPE_COL, "):")
-print(sort(table(seu[[CELLTYPE_COL]]), decreasing = TRUE))
+print(sort(table(seu@meta.data[[CELLTYPE_COL]]), decreasing = TRUE))
 
 
 # =============================================================================
