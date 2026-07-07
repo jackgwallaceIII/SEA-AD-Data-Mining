@@ -95,6 +95,12 @@ GENE        <- "TRAPPC9"
 OUTPUT_DIR  <- "results"
 dir.create(OUTPUT_DIR, showWarnings = FALSE)
 
+# Cell types to keep. Loading all ~970k cells for large regions like MEC
+# then converting to Seurat uses 40–50GB RAM. Subsetting to just the cell
+# types of interest at read time keeps memory manageable.
+# Set to NULL to load all cell types.
+CELL_TYPES_KEEP <- c("Immune", "Astrocyte")
+
 # ADNC groups — controls vs AD.
 # "Not AD"      : aged donors without AD neuropathology → Controls
 # "High"        : high AD neuropathological change        → AD
@@ -124,19 +130,36 @@ MIN_CELLS_FOR_STATS <- 10
 
 message("\n[1/7] Loading h5ad and converting to Seurat...")
 
-# Read h5ad → SingleCellExperiment → Seurat
+# Read h5ad → SingleCellExperiment
 sce <- readH5AD(H5AD_PATH, use.names = TRUE, verbose = FALSE)
+message("  Full dataset: ", ncol(sce), " cells, ", nrow(sce), " genes")
+
+# Subset to cell types of interest BEFORE converting to Seurat.
+# For large regions (e.g. MEC ~970k cells), loading everything into Seurat
+# can require 40-50GB RAM. Filtering at the SCE level is fast and cheap.
+if (!is.null(CELL_TYPES_KEEP)) {
+  subclass_col <- if ("Subclass" %in% names(colData(sce))) "Subclass" else NULL
+  if (!is.null(subclass_col)) {
+    keep_mask <- colData(sce)[[subclass_col]] %in% CELL_TYPES_KEEP
+    sce <- sce[, keep_mask]
+    message("  Subsetted to ", paste(CELL_TYPES_KEEP, collapse = ", "),
+            ": ", ncol(sce), " cells retained")
+  } else {
+    message("  WARNING: 'Subclass' column not found — loading all cell types")
+  }
+}
+
+# Convert to Seurat
 seu <- as.Seurat(sce, counts = "X", data = NULL)
 
-# zellkonverter puts obs metadata in colData; move to Seurat meta.data
-for (col in names(colData(sce))) {
-  seu[[col]] <- as.character(colData(sce)[[col]])
-}
+# Move obs metadata to Seurat meta.data in one shot (faster than column loop)
+seu@meta.data <- as.data.frame(colData(sce))
 
 # If UMAP was stored, add it
 if ("X_umap" %in% names(reducedDims(sce))) {
   umap_mat <- reducedDim(sce, "X_umap")
   colnames(umap_mat) <- c("UMAP_1", "UMAP_2")
+  rownames(umap_mat) <- colnames(seu)
   seu[["umap"]] <- CreateDimReducObject(embeddings = umap_mat, key = "UMAP_")
   message("  UMAP coordinates imported.")
 }
