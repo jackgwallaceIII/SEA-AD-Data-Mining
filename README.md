@@ -106,6 +106,7 @@ Rscript step2_TRAPPC9_seurat_analysis.R
 
 Update `H5AD_PATH` and `OUTPUT_DIR` at the top of the R script to match your local file paths.
 
-## Author
+## Authors
 
 Jack Wallace, Hu Lab, Virginia Commonwealth University School of Medicine
+Reaffa Hossain, Hu Lab, Virginia Commonwealth University School of Medicine
