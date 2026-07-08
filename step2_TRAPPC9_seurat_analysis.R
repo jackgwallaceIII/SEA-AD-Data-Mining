@@ -91,28 +91,20 @@ suppressPackageStartupMessages({
 # 1. CONFIGURATION
 # =============================================================================
 
-# To run a single region, set H5AD_PATH and leave REGIONS_TO_RUN as NULL.
-# To loop over all available regions automatically, set REGIONS_TO_RUN to a
-# character vector of region keys (e.g. c("HIP","MEC","PFC")) and leave
-# H5AD_PATH as NULL — the script will iterate and save outputs per region.
-H5AD_PATH      <- "seaad_data/HIP/SEAAD_HIP_subset_for_R.h5ad"
-REGIONS_TO_RUN <- NULL   # set to NULL when using H5AD_PATH directly
+# Set H5AD_PATH to whichever region you want to analyse.
+# The region label is auto-detected from the filename.
+H5AD_PATH <- "seaad_data/HIP/SEAAD_HIP_subset_for_R.h5ad"
 
-GENE           <- "TRAPPC9"
-OUTPUT_BASE    <- "results"   # per-region subfolders are created automatically
-
-# ---------------------------------------------------------------------------
-# Helper: run analysis for a single h5ad path
-# ---------------------------------------------------------------------------
-run_region <- function(h5ad_path) {
+GENE <- "TRAPPC9"
 
 # Auto-detect region label from filename (e.g. "SEAAD_HIP_subset..." → "HIP")
-region_match <- regmatches(h5ad_path,
-                           regexpr("SEAAD_([^_/]+)_subset", h5ad_path))
+region_match <- regmatches(H5AD_PATH,
+                           regexpr("SEAAD_([^_/]+)_subset", H5AD_PATH))
 REGION_LABEL <- if (length(region_match) > 0)
   sub("SEAAD_(.+)_subset.*", "\\1", region_match) else "Unknown"
 
-OUTPUT_DIR <- file.path(OUTPUT_BASE, REGION_LABEL)
+# Per-region output folder (e.g. results/HIP/, results/MEC/)
+OUTPUT_DIR <- file.path("results", REGION_LABEL)
 dir.create(OUTPUT_DIR, recursive = TRUE, showWarnings = FALSE)
 
 # Cell types to keep. Loading all ~970k cells for large regions like MEC
@@ -150,10 +142,10 @@ MIN_CELLS_FOR_STATS <- 10
 
 message("\n[1/7] Loading h5ad and converting to Seurat...")
 message("  Region : ", REGION_LABEL)
-message("  File   : ", h5ad_path)
+message("  File   : ", H5AD_PATH)
 
 # Read h5ad → SingleCellExperiment
-sce <- readH5AD(h5ad_path, use.names = TRUE, verbose = FALSE)
+sce <- readH5AD(H5AD_PATH, use.names = TRUE, verbose = FALSE)
 message("  Full dataset: ", ncol(sce), " cells, ", nrow(sce), " genes")
 
 # Subset to cell types of interest BEFORE converting to Seurat.
@@ -766,30 +758,3 @@ message("  ", GENE, "_log2FC_per_celltype.pdf       — log2FC barplot")
 message("  ", GENE, "_summary_heatmap.pdf           — Mean expression heatmap")
 message("  ", GENE, "_pseudobulk_DESeq2.csv         — Pseudobulk DE (if DESeq2 available)")
 message("\nDone!")
-
-} # end run_region()
-
-
-# =============================================================================
-# ENTRY POINT — single region or loop
-# =============================================================================
-
-if (!is.null(REGIONS_TO_RUN)) {
-  # Loop over all specified regions
-  h5ad_paths <- file.path("seaad_data", REGIONS_TO_RUN,
-                           paste0("SEAAD_", REGIONS_TO_RUN, "_subset_for_R.h5ad"))
-  for (p in h5ad_paths) {
-    if (!file.exists(p)) {
-      message("Skipping (file not found): ", p)
-      next
-    }
-    message("\n", strrep("=", 70))
-    message("STARTING REGION: ", p)
-    message(strrep("=", 70))
-    tryCatch(run_region(p),
-             error = function(e) message("ERROR in ", p, ": ", conditionMessage(e)))
-  }
-} else {
-  # Single-region mode (default)
-  run_region(H5AD_PATH)
-}
