@@ -2,14 +2,15 @@
 # SEA-AD TRAPPC9 Analysis Pipeline — Step 2: Seurat Analysis
 # =============================================================================
 # Dataset : Seattle Alzheimer's Disease Brain Cell Atlas (SEA-AD)
-# Region  : Hippocampus
 # Gene    : TRAPPC9
 # Question: How does TRAPPC9 expression differ across cell types between
 #           healthy controls (ADNC = "Not AD") and AD donors (ADNC = "High")?
 #
 # Prerequisites:
-#   1. Run step1_download_preprocess.py first to generate seaad_data/SEAAD_HIP_subset_for_R.h5ad
+#   1. Run step1_download_preprocess.py first to generate
+#      seaad_data/<REGION>/SEAAD_<REGION>_subset_for_R.h5ad for each region
 #   2. Install R packages listed below
+#   3. Set H5AD_PATH below (or loop over regions — see REGIONS_TO_RUN)
 #
 # Outputs (saved to results/):
 #   - TRAPPC9_dotplot_celltype_x_ADNC.pdf
@@ -90,10 +91,29 @@ suppressPackageStartupMessages({
 # 1. CONFIGURATION
 # =============================================================================
 
-H5AD_PATH   <- "seaad_data/SEAAD_HIP_subset_for_R.h5ad"
-GENE        <- "TRAPPC9"
-OUTPUT_DIR  <- "results"
-dir.create(OUTPUT_DIR, showWarnings = FALSE)
+# To run a single region, set H5AD_PATH and leave REGIONS_TO_RUN as NULL.
+# To loop over all available regions automatically, set REGIONS_TO_RUN to a
+# character vector of region keys (e.g. c("HIP","MEC","PFC")) and leave
+# H5AD_PATH as NULL — the script will iterate and save outputs per region.
+H5AD_PATH      <- "seaad_data/HIP/SEAAD_HIP_subset_for_R.h5ad"
+REGIONS_TO_RUN <- NULL   # set to NULL when using H5AD_PATH directly
+
+GENE           <- "TRAPPC9"
+OUTPUT_BASE    <- "results"   # per-region subfolders are created automatically
+
+# ---------------------------------------------------------------------------
+# Helper: run analysis for a single h5ad path
+# ---------------------------------------------------------------------------
+run_region <- function(h5ad_path) {
+
+# Auto-detect region label from filename (e.g. "SEAAD_HIP_subset..." → "HIP")
+region_match <- regmatches(h5ad_path,
+                           regexpr("SEAAD_([^_/]+)_subset", h5ad_path))
+REGION_LABEL <- if (length(region_match) > 0)
+  sub("SEAAD_(.+)_subset.*", "\\1", region_match) else "Unknown"
+
+OUTPUT_DIR <- file.path(OUTPUT_BASE, REGION_LABEL)
+dir.create(OUTPUT_DIR, recursive = TRUE, showWarnings = FALSE)
 
 # Cell types to keep. Loading all ~970k cells for large regions like MEC
 # then converting to Seurat uses 40–50GB RAM. Subsetting to just the cell
@@ -129,9 +149,11 @@ MIN_CELLS_FOR_STATS <- 10
 # =============================================================================
 
 message("\n[1/7] Loading h5ad and converting to Seurat...")
+message("  Region : ", REGION_LABEL)
+message("  File   : ", h5ad_path)
 
 # Read h5ad → SingleCellExperiment
-sce <- readH5AD(H5AD_PATH, use.names = TRUE, verbose = FALSE)
+sce <- readH5AD(h5ad_path, use.names = TRUE, verbose = FALSE)
 message("  Full dataset: ", ncol(sce), " cells, ", nrow(sce), " genes")
 
 # Subset to cell types of interest BEFORE converting to Seurat.
@@ -388,7 +410,7 @@ if ("umap" %in% names(seu@reductions)) {
     pt.size    = 0.3,
     cols       = c("lightgrey", "#D6604D")
   ) +
-    ggtitle(paste(GENE, "expression — SEA-AD Hippocampus")) +
+    ggtitle(paste(GENE, "expression —", REGION_LABEL, "(SEA-AD)")) +
     theme_classic(base_size = 12)
 
   p_umap_ct <- DimPlot(
@@ -482,7 +504,7 @@ p_vln_full <- VlnPlot(
     axis.text.x = element_text(angle = 45, hjust = 1),
     legend.position = "right"
   ) +
-  ggtitle(paste(GENE, "expression by cell type and ADNC —", "SEA-AD Hippocampus"))
+  ggtitle(paste(GENE, "expression by cell type and ADNC —", REGION_LABEL, "(SEA-AD)"))
 
 ggsave(file.path(OUTPUT_DIR, paste0(GENE, "_violin_by_subclass.pdf")),
        p_vln_full, width = max(10, n_ct * 0.9 + 2), height = 6)
@@ -527,7 +549,7 @@ p_bar <- ggplot(pct_df, aes(x = Cell_Type, y = pct_expressing, fill = ADNC)) +
   ) +
   labs(
     title = paste("% cells expressing", GENE, "by cell type and ADNC"),
-    subtitle = "SEA-AD Hippocampus",
+    subtitle = paste0("SEA-AD — ", REGION_LABEL),
     x = "Cell type", y = "% TRAPPC9+ cells"
   )
 
@@ -720,7 +742,7 @@ if (requireNamespace("DESeq2", quietly = TRUE)) {
 message("\n[7/7] Summary")
 message(paste0(strrep("=", 61)))
 message("Gene: ", GENE)
-message("Region: Hippocampus (SEA-AD)")
+message("Region: ", REGION_LABEL, " (SEA-AD)")
 message("Total cells analyzed: ", ncol(seu))
 message("Cells expressing ", GENE, ": ", n_expr, " (", round(pct_expr, 2), "%)")
 
@@ -744,3 +766,30 @@ message("  ", GENE, "_log2FC_per_celltype.pdf       — log2FC barplot")
 message("  ", GENE, "_summary_heatmap.pdf           — Mean expression heatmap")
 message("  ", GENE, "_pseudobulk_DESeq2.csv         — Pseudobulk DE (if DESeq2 available)")
 message("\nDone!")
+
+} # end run_region()
+
+
+# =============================================================================
+# ENTRY POINT — single region or loop
+# =============================================================================
+
+if (!is.null(REGIONS_TO_RUN)) {
+  # Loop over all specified regions
+  h5ad_paths <- file.path("seaad_data", REGIONS_TO_RUN,
+                           paste0("SEAAD_", REGIONS_TO_RUN, "_subset_for_R.h5ad"))
+  for (p in h5ad_paths) {
+    if (!file.exists(p)) {
+      message("Skipping (file not found): ", p)
+      next
+    }
+    message("\n", strrep("=", 70))
+    message("STARTING REGION: ", p)
+    message(strrep("=", 70))
+    tryCatch(run_region(p),
+             error = function(e) message("ERROR in ", p, ": ", conditionMessage(e)))
+  }
+} else {
+  # Single-region mode (default)
+  run_region(H5AD_PATH)
+}
