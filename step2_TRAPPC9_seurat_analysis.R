@@ -229,11 +229,12 @@ seu$Disease_Group <- ifelse(seu$ADNC == "Not AD", "Control (Not AD)",
                             as.character(seu$ADNC)))
 
 # Make sure cell-type columns are character
+# NOTE: seu[[col]] returns a data.frame in Seurat; use seu@meta.data[[col]] for the vector
 if (CELLTYPE_COL %in% colnames(seu@meta.data)) {
-  seu[[CELLTYPE_COL]] <- as.character(seu[[CELLTYPE_COL]])
+  seu@meta.data[[CELLTYPE_COL]] <- as.character(seu@meta.data[[CELLTYPE_COL]])
 }
 if ("Class" %in% colnames(seu@meta.data)) {
-  seu$Class <- as.character(seu$Class)
+  seu@meta.data[["Class"]] <- as.character(seu@meta.data[["Class"]])
 }
 
 Idents(seu) <- CELLTYPE_COL
