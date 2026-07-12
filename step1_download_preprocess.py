@@ -17,6 +17,16 @@ IMPORTANT: The full datasets have >2^32 non-zero matrix elements, which exceeds
 R's 32-bit integer limit. This step produces smaller files that load fine in R.
 (See: https://community.brain-map.org/t/sea-ad-snrnaseq-dataset-format/3454)
 
+MEMORY NOTE (added after MTG OOM crash):
+Large regions (MTG: ~1.18M cells, PFC likely similar) retain close to 100% of
+cells after ADNC filtering. Row-slicing a backed CSR matrix by boolean mask
+the naive way (`X_backed[mask]`) forces anndata to concatenate index/data
+slices for EVERY kept row into ONE array in RAM -- for MTG this needed 49+ GB
+just for the indices array. Instead, this version streams the filtered CSR
+matrix to the output file in row-chunks (default 50,000 rows), so peak memory
+use is bounded by the chunk size, not the dataset size, no matter how big a
+future region is.
+
 Requirements (install with pip):
     pip install anndata numpy pandas scipy h5py
 
@@ -39,8 +49,8 @@ import pandas as pd
 import anndata as ad
 import scipy.sparse as sp
 
-# read_elem / sparse_dataset moved between anndata.experimental and anndata.io
-# across versions — try the modern locations first, fall back to older ones.
+# read_elem / sparse_dataset / write_elem moved between anndata.experimental
+# and anndata.io across versions -- try the modern locations first.
 try:
     from anndata import read_elem
 except ImportError:
@@ -52,6 +62,13 @@ except ImportError:
         from anndata.io import sparse_dataset
     except ImportError:
         from anndata.experimental import sparse_dataset
+try:
+    from anndata.io import write_elem
+except ImportError:
+    try:
+        from anndata import write_elem
+    except ImportError:
+        from anndata.experimental import write_elem
 
 # ---------------------------------------------------------------------------
 # CONFIGURATION — adjust if needed
@@ -59,20 +76,11 @@ except ImportError:
 
 OUTPUT_DIR = "seaad_data"
 
-# Each entry describes how to locate that region's h5ad on S3.
-#   folder              : top-level S3 prefix for the region
-#   subdir               : sub-prefix under the folder (most regions use "RNAseq")
-#   filename_template    : filename pattern, with {code} and {date} placeholders
-#   candidate_dates       : dates to try, newest first
-#
-# Most regions follow the standard SEA-AD naming convention:
-#   <folder>/RNAseq/SEAAD_<code>_RNAseq_final-nuclei.<date>.h5ad
-#
-# Two regions are irregular on the S3 bucket as of this writing:
-#   - PFC:  the bucket folder is "PFC" but the files inside still use the
-#           legacy region code "DFC" (Dorsolateral Frontal Cortex).
-#   - Caudate_Nucleus: has no "RNAseq" subdir and uses a different filename
-#           pattern entirely ("CaH_all_nuclei.<date>.h5ad").
+# How many rows to process per chunk when streaming large sparse matrices.
+# Lower this (e.g. 20_000) if you still see memory errors; raise it
+# (e.g. 100_000) for speed if you have plenty of RAM.
+ROW_CHUNK_SIZE = 50_000
+
 STANDARD_DATES = ["2026-06-22", "2024-02-13", "2023-05-05", "2022-08-18"]
 
 REGIONS = {
@@ -82,41 +90,11 @@ REGIONS = {
         "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
         "candidate_dates": STANDARD_DATES,
     },
-    "MEC": {
-        "name": "Medial entorhinal cortex",
-        "folder": "MEC", "code": "MEC", "subdir": "RNAseq",
-        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
-        "candidate_dates": STANDARD_DATES,
-    },
-    "LEC": {
-        "name": "Lateral entorhinal cortex",
-        "folder": "LEC", "code": "LEC", "subdir": "RNAseq",
-        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
-        "candidate_dates": STANDARD_DATES,
-    },
-    "ITG": {
-        "name": "Inferior temporal gyrus",
-        "folder": "ITG", "code": "ITG", "subdir": "RNAseq",
-        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
-        "candidate_dates": STANDARD_DATES,
-    },
     "MTG": {
         "name": "Middle temporal gyrus",
         "folder": "MTG", "code": "MTG", "subdir": "RNAseq",
         "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
         "candidate_dates": STANDARD_DATES + ["2022-06-07"],
-    },
-    "STG": {
-        "name": "Superior temporal gyrus",
-        "folder": "STG", "code": "STG", "subdir": "RNAseq",
-        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
-        "candidate_dates": STANDARD_DATES,
-    },
-    "FI": {
-        "name": "Frontal insula",
-        "folder": "FI", "code": "FI", "subdir": "RNAseq",
-        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
-        "candidate_dates": STANDARD_DATES,
     },
     "PFC": {
         "name": "Prefrontal cortex",
@@ -124,34 +102,12 @@ REGIONS = {
         "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
         "candidate_dates": STANDARD_DATES,
     },
-    "AnG": {
-        "name": "Angular gyrus",
-        "folder": "AnG", "code": "AnG", "subdir": "RNAseq",
-        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
-        "candidate_dates": STANDARD_DATES,
-    },
-    "V1C": {
-        "name": "Primary visual cortex",
-        "folder": "V1C", "code": "V1C", "subdir": "RNAseq",
-        "filename_template": "SEAAD_{code}_RNAseq_final-nuclei.{date}.h5ad",
-        "candidate_dates": STANDARD_DATES,
-    },
-    "Caudate_Nucleus": {
-        "name": "Caudate Nucleus (head of the caudate)",
-        "folder": "Caudate_Nucleus", "code": "CaH", "subdir": "",
-        "filename_template": "CaH_all_nuclei.{date}.h5ad",
-        "candidate_dates": ["2025-12-29"],
-    },
 }
 
-# Which regions to actually download & process. Defaults to all of them;
-# trim this list to run a subset (e.g. ["HIP", "PFC"]).
 REGIONS_TO_PROCESS = list(REGIONS.keys())
 
 S3_BUCKET = "https://sea-ad-single-cell-profiling.s3.amazonaws.com"
 
-# Metadata columns to keep (everything else is dropped to reduce file size)
-# Rename map: {original_col_name: short_name_for_R}
 KEEP_COLS = {
     "Overall AD neuropathological Change": "ADNC",
     "Supertype":                           "Supertype",
@@ -167,23 +123,15 @@ KEEP_COLS = {
     "library_prep":                        "library_prep",
 }
 
-# ADNC groups to KEEP (exclude "Reference" — young mapping donors, not part of cohort)
 ADNC_KEEP = ["Not AD", "Low", "Intermediate", "High"]
-
-# Cell subclasses to keep. Set to None to keep all cell types.
-# Filtering here dramatically reduces output file sizes for large regions
-# (e.g. MTG goes from ~150GB to ~5GB when restricted to Immune + Astrocyte).
-SUBCLASS_KEEP = ["Immune", "Astrocyte"]
-
 GENE_OF_INTEREST = "TRAPPC9"
 
 
 # ---------------------------------------------------------------------------
-# HELPER FUNCTIONS
+# HELPER FUNCTIONS — download / discovery (unchanged)
 # ---------------------------------------------------------------------------
 
 def url_exists(url: str, timeout: int = 15) -> bool:
-    """Return True if the URL responds with a 200 status."""
     try:
         req = urllib.request.Request(url, method="HEAD")
         with urllib.request.urlopen(req, timeout=timeout):
@@ -193,7 +141,6 @@ def url_exists(url: str, timeout: int = 15) -> bool:
 
 
 def find_download_url(region_key: str, cfg: dict) -> tuple:
-    """Try each candidate date for a region and return the first working URL."""
     base_url = "/".join(p for p in (S3_BUCKET, cfg["folder"], cfg["subdir"]) if p)
     for date in cfg["candidate_dates"]:
         fname = cfg["filename_template"].format(code=cfg["code"], date=date)
@@ -212,7 +159,6 @@ def find_download_url(region_key: str, cfg: dict) -> tuple:
 
 
 def download_with_progress(url: str, dest: str) -> None:
-    """Download a file with a simple progress display."""
     def _hook(count, block_size, total_size):
         pct = count * block_size / total_size * 100
         downloaded_mb = count * block_size / 1e6
@@ -224,6 +170,94 @@ def download_with_progress(url: str, dest: str) -> None:
     print(f"\nDownloading (this may take 10-30+ minutes depending on your connection):")
     urllib.request.urlretrieve(url, dest, reporthook=_hook)
     print("\n  Download complete.")
+
+
+# ---------------------------------------------------------------------------
+# NEW: memory-safe streaming CSR filter/copy
+# ---------------------------------------------------------------------------
+
+def stream_filtered_csr_to_group(h5in_group, mask_arr, h5out_parent, out_name,
+                                  row_chunk=ROW_CHUNK_SIZE,
+                                  indices_dtype=np.int32,
+                                  gene_idx=None):
+    """
+    Read a disk-backed CSR matrix (h5in_group: h5py Group with data/indices/
+    indptr datasets) in row-chunks, keep only rows where mask_arr is True,
+    and write the result straight to h5out_parent[out_name] as a new
+    anndata-compatible CSR group -- WITHOUT ever holding the full matrix
+    in RAM. Peak memory is bounded by `row_chunk` rows at a time.
+
+    If gene_idx is given, also returns the number of kept rows where that
+    gene column has a nonzero value (for the TRAPPC9 detection count).
+    """
+    indptr_in = h5in_group["indptr"][:]          # small (n_obs+1 int64s), safe to load whole
+    data_in = h5in_group["data"]
+    indices_in = h5in_group["indices"]
+    n_obs = indptr_in.shape[0] - 1
+    n_vars = int(h5in_group.attrs["shape"][1])
+    data_dtype = data_in.dtype
+
+    n_kept = int(mask_arr.sum())
+    out_group = h5out_parent.create_group(out_name)
+    out_data = out_group.create_dataset("data", shape=(0,), maxshape=(None,),
+                                         dtype=data_dtype, chunks=True)
+    out_indices = out_group.create_dataset("indices", shape=(0,), maxshape=(None,),
+                                            dtype=indices_dtype, chunks=True)
+    out_indptr = np.zeros(n_kept + 1, dtype=np.int64)
+
+    write_pos = 0
+    kept_rows_so_far = 0
+    gene_detected_count = 0
+
+    for start in range(0, n_obs, row_chunk):
+        end = min(start + row_chunk, n_obs)
+        block_mask = mask_arr[start:end]
+        if not block_mask.any():
+            continue
+
+        elem_start, elem_end = int(indptr_in[start]), int(indptr_in[end])
+        block_data = data_in[elem_start:elem_end]
+        block_indices = indices_in[elem_start:elem_end].astype(indices_dtype, copy=False)
+        local_indptr = indptr_in[start:end + 1] - elem_start
+
+        keep_rows = np.where(block_mask)[0]
+        slices = [slice(int(local_indptr[i]), int(local_indptr[i + 1])) for i in keep_rows]
+
+        if slices:
+            block_data_kept = np.concatenate([block_data[s] for s in slices])
+            block_indices_kept = np.concatenate([block_indices[s] for s in slices])
+        else:
+            block_data_kept = np.empty(0, dtype=data_dtype)
+            block_indices_kept = np.empty(0, dtype=indices_dtype)
+
+        if gene_idx is not None:
+            for s in slices:
+                if gene_idx in block_indices[s]:
+                    gene_detected_count += 1
+
+        n_new = block_data_kept.shape[0]
+        new_size = write_pos + n_new
+        out_data.resize((new_size,))
+        out_indices.resize((new_size,))
+        out_data[write_pos:new_size] = block_data_kept
+        out_indices[write_pos:new_size] = block_indices_kept
+
+        row_lengths = np.diff(local_indptr)[keep_rows]
+        cum = write_pos + np.cumsum(row_lengths)
+        out_indptr[kept_rows_so_far + 1: kept_rows_so_far + 1 + len(keep_rows)] = cum
+
+        write_pos = new_size
+        kept_rows_so_far += len(keep_rows)
+        print(f"    ...streamed {end:,}/{n_obs:,} rows "
+              f"({kept_rows_so_far:,} kept, {write_pos:,} nonzeros written)", end="\r")
+
+    print()
+    out_group.create_dataset("indptr", data=out_indptr)
+    out_group.attrs["encoding-type"] = "csr_matrix"
+    out_group.attrs["encoding-version"] = "0.1.0"
+    out_group.attrs["shape"] = np.array([n_kept, n_vars])
+
+    return n_kept, gene_detected_count
 
 
 # ---------------------------------------------------------------------------
@@ -249,23 +283,14 @@ def process_region(region_key: str) -> None:
     else:
         download_with_progress(url, local_h5ad)
 
-    # ---- 2. Open the h5ad without eagerly loading large non-X groups -------
-    # anndata's high-level `read_h5ad(..., backed="r")` only defers loading
-    # of X — it still eagerly reads obsm/varm/obsp/varp/uns/layers in full,
-    # which OOMs on regions whose raw-UMI layer is tens of GB. We instead
-    # open the file with h5py directly and only build lazy (disk-backed)
-    # handles for X and layers/UMIs, materializing rows only after filtering.
+    # ---- 2. Open the h5ad without eagerly loading large groups -------------
     print("\n" + "=" * 70)
     print(f"Step 1b [{region_key}]: Opening h5ad (lazy, X/UMIs not yet loaded)")
     print("=" * 70)
     h5file = h5py.File(local_h5ad, "r")
     obs = read_elem(h5file["obs"])
     var = read_elem(h5file["var"])
-    X_backed = sparse_dataset(h5file["X"])
-    umis_backed = None
-    if "layers" in h5file and "UMIs" in h5file["layers"]:
-        umis_backed = sparse_dataset(h5file["layers"]["UMIs"])
-    n_obs, n_vars = X_backed.shape
+    n_obs, n_vars = h5file["X"].attrs["shape"] if "shape" in h5file["X"].attrs else sparse_dataset(h5file["X"]).shape
     print(f"  Shape: {n_obs:,} cells x {n_vars:,} genes")
 
     # ---- 3. Inspect metadata -----------------------------------------------
@@ -276,7 +301,6 @@ def process_region(region_key: str) -> None:
     if adnc_col in obs.columns:
         print(f"\nADNC distribution:\n{obs[adnc_col].value_counts()}")
     else:
-        # Column may have a slightly different name — search for it
         candidates = [c for c in obs.columns if "neuropath" in c.lower() or "adnc" in c.lower()]
         if candidates:
             adnc_col = candidates[0]
@@ -289,10 +313,11 @@ def process_region(region_key: str) -> None:
     if "Subclass" in obs.columns:
         print(f"\nSubclass distribution:\n{obs['Subclass'].value_counts()}")
 
-    # ---- 4. Check TRAPPC9 is present (cheap: just check var_names) --------
+    gene_idx = None
     print(f"\n--- {GENE_OF_INTEREST} check ---")
     if GENE_OF_INTEREST in var.index:
-        print(f"  {GENE_OF_INTEREST} found in var_names "
+        gene_idx = var.index.get_loc(GENE_OF_INTEREST)
+        print(f"  {GENE_OF_INTEREST} found in var_names at index {gene_idx} "
               f"(expression count will be reported after subsetting).")
     else:
         print(f"  WARNING: {GENE_OF_INTEREST} not in gene names.")
@@ -302,7 +327,7 @@ def process_region(region_key: str) -> None:
         else:
             print("  No partial matches found. Gene may be absent from this dataset.")
 
-    # ---- 5. Filter cells ---------------------------------------------------
+    # ---- 4. Filter cells (mask only, no data read yet) ---------------------
     print("\n" + "=" * 70)
     print(f"Step 1c [{region_key}]: Filtering cells")
     print("=" * 70)
@@ -324,83 +349,101 @@ def process_region(region_key: str) -> None:
         print("  WARNING: 'Subclass' column not found — skipping subclass filter")
 
     mask_arr = mask.to_numpy()
+    obs_sub = obs[mask_arr].copy()
 
-    # ---- 6. Read only the filtered rows into memory -------------------------
-    # Row-slicing a backed sparse dataset reads just the requested rows from
-    # disk, so this only pulls in the cells that survived the ADNC filter.
-    print("\n  Reading filtered subset from disk (row-sliced, not full matrix)...")
-    X_sub = X_backed[mask_arr]
-    obs_sub = obs[mask_arr]
-    adata_sub = ad.AnnData(X=X_sub, obs=obs_sub, var=var.copy())
-    if umis_backed is not None:
-        adata_sub.layers["UMIs"] = umis_backed[mask_arr]
-    h5file.close()
-    print(f"  Subset shape: {adata_sub.n_obs:,} x {adata_sub.n_vars:,}")
-
-    if GENE_OF_INTEREST in adata_sub.var_names:
-        gene_idx = adata_sub.var_names.get_loc(GENE_OF_INTEREST)
-        col = adata_sub.X[:, gene_idx]
-        n_expr = (col > 0).sum() if sp.issparse(col) else (np.array(col) > 0).sum()
-        pct = n_expr / adata_sub.n_obs * 100 if adata_sub.n_obs else 0
-        print(f"  {GENE_OF_INTEREST} detected in {n_expr:,} / {adata_sub.n_obs:,} "
-              f"retained cells ({pct:.2f}%)")
-
-    # ---- 7. Set counts matrix to raw UMIs (needed for DE in R) -------------
-    if "UMIs" in adata_sub.layers:
-        print("  Setting .X to raw UMI counts (from .layers['UMIs'])")
-        adata_sub.layers["normalized"] = adata_sub.X.copy()   # save log1p normalized
-        adata_sub.X = adata_sub.layers["UMIs"].copy()
-    else:
-        print("  .layers['UMIs'] not found — .X left as-is (may be log-normalized)")
-
-    # ---- 8. Slim down metadata columns -------------------------------------
+    # ---- 5. Slim metadata columns down BEFORE any big I/O ------------------
     print("\n  Selecting metadata columns...")
-    present = {k: v for k, v in KEEP_COLS.items() if k in adata_sub.obs.columns}
-    missing = [k for k in KEEP_COLS if k not in adata_sub.obs.columns]
+    present = {k: v for k, v in KEEP_COLS.items() if k in obs_sub.columns}
+    missing = [k for k in KEEP_COLS if k not in obs_sub.columns]
     if missing:
         print(f"  NOTE: these columns were not found and will be skipped: {missing}")
 
-    adata_sub.obs = adata_sub.obs[list(present.keys())].rename(columns=present)
-    adata_sub.obs["Region"] = region_key
+    obs_sub = obs_sub[list(present.keys())].rename(columns=present)
+    obs_sub["Region"] = region_key
 
-    # Ensure ADNC has tidy name in renamed obs
     adnc_new = present.get(adnc_col, "ADNC") if adnc_col else "ADNC"
-    if adnc_new in adata_sub.obs.columns:
-        # Add binary grouping column for convenience in R
-        adata_sub.obs["Disease_Group"] = adata_sub.obs[adnc_new].map(
+    if adnc_new in obs_sub.columns:
+        obs_sub["Disease_Group"] = obs_sub[adnc_new].map(
             {"Not AD": "Control", "Low": "Low_AD",
              "Intermediate": "Intermediate_AD", "High": "High_AD"}
         ).astype(str).fillna("Unknown")
 
-    # ---- 9. Drop obsm/obsp/varp to reduce file size (UMAP can be kept) ----
-    # Keep UMAP if present
-    keep_obsm = {k: v for k, v in adata_sub.obsm.items()
-                 if "umap" in k.lower() or "X_umap" in k}
-    adata_sub.obsm = keep_obsm
-
-    # Remove obsp (connectivity graphs, large and not needed in R)
-    adata_sub.obsp = {}
-
-    # Remove varm, uns (not needed)
-    adata_sub.varm = {}
-    adata_sub.uns = {}
-
-    # ---- 10. Save ----------------------------------------------------------
+    # ---- 6. Stream-write the filtered matrices straight to the output file
+    # This is the memory-safe replacement for the old `X_backed[mask_arr]`
+    # line that OOM'd on MTG. Nothing here holds more than ROW_CHUNK_SIZE
+    # rows' worth of data in RAM at once.
     out_path = os.path.join(region_dir, f"SEAAD_{region_key}_subset_for_R.h5ad")
-    print(f"\n  Saving subset to: {out_path}")
-    adata_sub.write_h5ad(out_path, compression="gzip")
-    print(f"  Done! File size: {os.path.getsize(out_path) / 1e9:.2f} GB")
+    print("\n" + "=" * 70)
+    print(f"Step 1d [{region_key}]: Streaming filtered matrix to {out_path}")
+    print("  (processing in chunks of {:,} rows -- this avoids the OOM)".format(ROW_CHUNK_SIZE))
+    print("=" * 70)
 
+    with h5py.File(out_path, "w") as out_file:
+        # Original X becomes the "normalized" layer in the output.
+        print("  Writing layers/UMIs -> normalized ...")
+        _, gene_detected_normalized = stream_filtered_csr_to_group(
+            h5file["X"], mask_arr, out_file, "layers_tmp_normalized",
+            gene_idx=gene_idx,
+        )
+
+        # Final .X is the raw UMI counts, if present; otherwise reuse the
+        # normalized data we just streamed (rename below).
+        if "layers" in h5file and "UMIs" in h5file["layers"]:
+            print("  Writing raw UMI counts -> X ...")
+            n_kept, gene_detected = stream_filtered_csr_to_group(
+                h5file["layers"]["UMIs"], mask_arr, out_file, "X",
+                gene_idx=gene_idx,
+            )
+            has_umis = True
+        else:
+            print("  .layers['UMIs'] not found in source file — X will be the "
+                  "same data as the normalized layer.")
+            n_kept, gene_detected = mask_arr.sum(), gene_detected_normalized
+            has_umis = False
+
+        # obsm (e.g. UMAP) is small and dense -- safe to read fully and mask
+        # in memory before we close the source file.
+        obsm_to_write = {}
+        if "obsm" in h5file:
+            for key in h5file["obsm"].keys():
+                if "umap" in key.lower():
+                    arr = read_elem(h5file["obsm"][key])
+                    obsm_to_write[key] = np.asarray(arr)[mask_arr]
+
+        h5file.close()
+
+        # Rename/organize the layers group properly now that we know
+        # whether UMIs existed.
+        layers_group = out_file.create_group("layers")
+        if has_umis:
+            out_file.move("layers_tmp_normalized", "layers/normalized")
+        else:
+            out_file.move("layers_tmp_normalized", "X")
+
+        if gene_idx is not None:
+            pct = gene_detected / n_kept * 100 if n_kept else 0
+            print(f"  {GENE_OF_INTEREST} detected in {gene_detected:,} / {n_kept:,} "
+                  f"retained cells ({pct:.2f}%)")
+
+        # ---- 7. Write obs/var (small — fine to write directly) -------------
+        print("\n  Writing obs/var metadata...")
+        write_elem(out_file, "obs", obs_sub)
+        write_elem(out_file, "var", var)
+
+        # ---- 8. obsm: keep UMAP only, if present (small, dense) ------------
+        if obsm_to_write:
+            obsm_group = out_file.create_group("obsm")
+            for key, arr in obsm_to_write.items():
+                write_elem(obsm_group, key, arr)
+
+        out_file.attrs["encoding-type"] = "anndata"
+        out_file.attrs["encoding-version"] = "0.1.0"
+
+    print(f"\n  Done! File size: {os.path.getsize(out_path) / 1e9:.2f} GB")
     print("\n" + "=" * 70)
     print(f"Step 1 complete for {region_key}!")
     print(f"  Output: {out_path}")
     print("=" * 70)
-
-    # Print final obs column summary for R user
-    print(f"\nMetadata columns in output h5ad (obs) for {region_key}:")
-    for col in adata_sub.obs.columns:
-        print(f"  {col}: {adata_sub.obs[col].dtype}  "
-              f"  unique={adata_sub.obs[col].nunique()}")
 
 
 # ---------------------------------------------------------------------------
