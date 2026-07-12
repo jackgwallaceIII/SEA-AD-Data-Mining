@@ -170,6 +170,11 @@ KEEP_COLS = {
 # ADNC groups to KEEP (exclude "Reference" — young mapping donors, not part of cohort)
 ADNC_KEEP = ["Not AD", "Low", "Intermediate", "High"]
 
+# Cell subclasses to keep. Set to None to keep all cell types.
+# Filtering here dramatically reduces output file sizes for large regions
+# (e.g. MTG goes from ~150GB to ~5GB when restricted to Immune + Astrocyte).
+SUBCLASS_KEEP = ["Immune", "Astrocyte"]
+
 GENE_OF_INTEREST = "TRAPPC9"
 
 
@@ -305,10 +310,18 @@ def process_region(region_key: str) -> None:
     if adnc_col:
         mask = obs[adnc_col].isin(ADNC_KEEP)
         print(f"  Keeping ADNC in {ADNC_KEEP}")
-        print(f"  Cells retained: {mask.sum():,} / {len(mask):,}")
+        print(f"  Cells retained after ADNC filter: {mask.sum():,} / {len(mask):,}")
     else:
         print("  WARNING: skipping ADNC filter (column not found)")
         mask = pd.Series(True, index=obs.index)
+
+    if SUBCLASS_KEEP is not None and "Subclass" in obs.columns:
+        subclass_mask = obs["Subclass"].isin(SUBCLASS_KEEP)
+        mask = mask & subclass_mask
+        print(f"  Keeping Subclass in {SUBCLASS_KEEP}")
+        print(f"  Cells retained after Subclass filter: {mask.sum():,} / {len(mask):,}")
+    elif SUBCLASS_KEEP is not None:
+        print("  WARNING: 'Subclass' column not found — skipping subclass filter")
 
     mask_arr = mask.to_numpy()
 
