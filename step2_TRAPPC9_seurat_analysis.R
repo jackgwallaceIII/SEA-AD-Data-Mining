@@ -159,7 +159,7 @@ message("  Region : ", REGION_LABEL)
 message("  File   : ", H5AD_PATH)
 
 # Read h5ad → SingleCellExperiment
-sce <- readH5AD(H5AD_PATH, verbose = FALSE, backed = TRUE)
+sce <- readH5AD(H5AD_PATH, verbose = FALSE, hdf5_backed = TRUE)
 message("  Full dataset: ", ncol(sce), " cells, ", nrow(sce), " genes")
 
 # Subset to cell types of interest BEFORE converting to Seurat.
