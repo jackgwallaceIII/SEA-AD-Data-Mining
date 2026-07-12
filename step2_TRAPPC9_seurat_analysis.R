@@ -463,11 +463,11 @@ seu_contrast <- subset(seu, ADNC %in% c("Not AD", "High"))
 
 # Create a combined grouping identity: CellType|ADNC
 seu_contrast$CT_ADNC <- paste0(
-  seu_contrast[[CELLTYPE_COL]], " | ",
+  seu_contrast@meta.data[[CELLTYPE_COL]], " | ",
   ifelse(seu_contrast$ADNC == "Not AD", "Control", "AD")
 )
 # Order: for each cell type, Control then AD
-ct_levels   <- sort(unique(seu_contrast[[CELLTYPE_COL]]))
+ct_levels   <- sort(unique(seu_contrast@meta.data[[CELLTYPE_COL]]))
 dot_order   <- as.vector(rbind(
   paste0(ct_levels, " | Control"),
   paste0(ct_levels, " | AD")
@@ -669,8 +669,8 @@ if (requireNamespace("DESeq2", quietly = TRUE)) {
     donor_col <- donor_col[1]
 
     # Aggregate counts per donor × cell type
-    pb_list <- lapply(unique(seu_pb[[CELLTYPE_COL]]), function(ct) {
-      ct_cells <- subset(seu_pb, cells = colnames(seu_pb)[seu_pb[[CELLTYPE_COL]] == ct])
+    pb_list <- lapply(unique(seu_pb@meta.data[[CELLTYPE_COL]]), function(ct) {
+      ct_cells <- subset(seu_pb, cells = colnames(seu_pb)[seu_pb@meta.data[[CELLTYPE_COL]] == ct])
       if (ncol(ct_cells) < MIN_CELLS_FOR_STATS) return(NULL)
 
       donors <- unique(ct_cells[[donor_col]])
