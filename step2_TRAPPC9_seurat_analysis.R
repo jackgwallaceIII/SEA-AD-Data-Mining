@@ -91,50 +91,64 @@ suppressPackageStartupMessages({
 # 1. CONFIGURATION
 # =============================================================================
 
-# Set H5AD_PATH to whichever region you want to analyse.
-# The region label is auto-detected from the filename.
-H5AD_PATH <- "seaad_data/HIP/SEAAD_HIP_subset_for_R.h5ad"
+# Regions to run. The loop below iterates over all of them automatically.
+# Remove or comment out any region you don't want to process.
+REGIONS_TO_RUN <- c("HIP", "MTG", "PFC")
+
+# (H5AD_PATH is set inside the loop — do not set it here)
+H5AD_PATH <- NULL   # placeholder; overwritten each iteration
 
 GENE <- "TRAPPC9"
 
-# Auto-detect region label from filename (e.g. "SEAAD_HIP_subset..." → "HIP")
-region_match <- regmatches(H5AD_PATH,
-                           regexpr("SEAAD_([^_/]+)_subset", H5AD_PATH))
-REGION_LABEL <- if (length(region_match) > 0)
-  sub("SEAAD_(.+)_subset.*", "\\1", region_match) else "Unknown"
-
-# Per-region output folder (e.g. results/HIP/, results/MEC/)
-OUTPUT_DIR <- file.path("results", REGION_LABEL)
-dir.create(OUTPUT_DIR, recursive = TRUE, showWarnings = FALSE)
-
-# Cell types to keep. Loading all ~970k cells for large regions like MEC
-# then converting to Seurat uses 40–50GB RAM. Subsetting to just the cell
-# types of interest at read time keeps memory manageable.
-# Set to NULL to load all cell types.
+# Cell types to keep. Set to NULL to load all cell types.
 CELL_TYPES_KEEP <- c("Immune", "Astrocyte")
 
 # ADNC groups — controls vs AD.
-# "Not AD"      : aged donors without AD neuropathology → Controls
-# "High"        : high AD neuropathological change        → AD
-# "Low" / "Intermediate" are included for gradient plots
 CONTROL_LABEL <- "Not AD"
 AD_LABEL      <- "High"
 
 # Colors for ADNC groups (ordered from low to high pathology)
 ADNC_COLORS <- c(
-  "Not AD"       = "#2166AC",   # blue  = control
-  "Low"          = "#74ADD1",   # light blue
-  "Intermediate" = "#F4A582",   # orange
-  "High"         = "#D6604D"    # red   = high AD
+  "Not AD"       = "#2166AC",
+  "Low"          = "#74ADD1",
+  "Intermediate" = "#F4A582",
+  "High"         = "#D6604D"
 )
 
 # Cell-type resolution to use for main plots
-# Options: "Class", "Subclass", "Supertype"
-CELLTYPE_COL <- "Subclass"   # good balance of resolution vs sample size
+CELLTYPE_COL <- "Subclass"
 
 # Minimum cells per group required for statistical testing
 MIN_CELLS_FOR_STATS <- 10
 
+
+# =============================================================================
+# MAIN LOOP — runs once per region
+# =============================================================================
+
+for (region in REGIONS_TO_RUN) {
+
+message("\n", strrep("=", 65))
+message("PROCESSING REGION: ", region)
+message(strrep("=", 65))
+
+H5AD_PATH <- file.path("seaad_data", region,
+                        paste0("SEAAD_", region, "_subset_for_R.h5ad"))
+
+if (!file.exists(H5AD_PATH)) {
+  message("  File not found — skipping: ", H5AD_PATH)
+  next
+}
+
+# Auto-detect region label from filename (e.g. "SEAAD_HIP_subset..." → "HIP")
+region_match <- regmatches(H5AD_PATH,
+                           regexpr("SEAAD_([^_/]+)_subset", H5AD_PATH))
+REGION_LABEL <- if (length(region_match) > 0)
+  sub("SEAAD_(.+)_subset.*", "\\1", region_match) else region
+
+# Per-region output folder (e.g. results/HIP/, results/MTG/)
+OUTPUT_DIR <- file.path("results", REGION_LABEL)
+dir.create(OUTPUT_DIR, recursive = TRUE, showWarnings = FALSE)
 
 # =============================================================================
 # 2. LOAD DATA
@@ -166,8 +180,14 @@ if (!is.null(CELL_TYPES_KEEP)) {
 # Convert to Seurat
 seu <- as.Seurat(sce, counts = "X", data = NULL)
 
-# Move obs metadata to Seurat meta.data in one shot (faster than column loop)
-seu@meta.data <- as.data.frame(colData(sce))
+# Move obs metadata to Seurat meta.data, decoding factors → character strings.
+# as.data.frame(colData()) alone converts h5ad categoricals to integer codes;
+# lapply with as.character() preserves the string labels (e.g. "Astrocyte").
+seu@meta.data <- as.data.frame(
+  lapply(colData(sce), function(x) if (is.factor(x)) as.character(x) else as.vector(x)),
+  stringsAsFactors = FALSE,
+  row.names        = colnames(sce)
+)
 
 # If UMAP was stored, add it
 if ("X_umap" %in% names(reducedDims(sce))) {
@@ -757,4 +777,15 @@ message("  ", GENE, "_pct_expressing_barplot.pdf    — % expressing cells")
 message("  ", GENE, "_log2FC_per_celltype.pdf       — log2FC barplot")
 message("  ", GENE, "_summary_heatmap.pdf           — Mean expression heatmap")
 message("  ", GENE, "_pseudobulk_DESeq2.csv         — Pseudobulk DE (if DESeq2 available)")
-message("\nDone!")
+message("\nDone — ", region, "!")
+
+# Clean up large objects before next region
+rm(seu, meta); if (exists("seu_contrast")) rm(seu_contrast)
+if (exists("seu_pb")) rm(seu_pb)
+gc()
+
+} # end for (region in REGIONS_TO_RUN)
+
+message("\n", strrep("=", 65))
+message("ALL REGIONS COMPLETE.")
+message(strrep("=", 65))
