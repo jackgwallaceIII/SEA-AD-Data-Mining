@@ -673,19 +673,19 @@ if (requireNamespace("DESeq2", quietly = TRUE)) {
       ct_cells <- subset(seu_pb, cells = colnames(seu_pb)[seu_pb@meta.data[[CELLTYPE_COL]] == ct])
       if (ncol(ct_cells) < MIN_CELLS_FOR_STATS) return(NULL)
 
-      donors <- unique(ct_cells[[donor_col]])
+      donors <- unique(ct_cells@meta.data[[donor_col]])
       count_mat <- sapply(donors, function(d) {
-        d_cells <- subset(ct_cells, cells = colnames(ct_cells)[ct_cells[[donor_col]] == d])
+        d_cells <- subset(ct_cells, cells = colnames(ct_cells)[ct_cells@meta.data[[donor_col]] == d])
         if (ncol(d_cells) == 0) return(NULL)
         rowSums(GetAssayData(d_cells, layer = "counts"))
       })
       if (is.null(count_mat) || length(count_mat) == 0) return(NULL)
 
+      donor_adnc <- sapply(donors, function(d)
+        as.character(unique(ct_cells@meta.data$ADNC[ct_cells@meta.data[[donor_col]] == d])[1]))
       meta_pb <- data.frame(
-        donor    = donors,
-        ADNC     = ct_cells[[donor_col]] %>%
-                   {sapply(donors, function(d)
-                     unique(ct_cells$ADNC[ct_cells[[donor_col]] == d])[1])},
+        donor     = donors,
+        ADNC      = donor_adnc,
         row.names = donors
       )
       meta_pb$group <- ifelse(meta_pb$ADNC == "Not AD", "Control", "AD")
