@@ -421,6 +421,7 @@ if ("umap" %in% names(seu@reductions)) {
     reduction  = "umap",
     order      = TRUE,
     pt.size    = 0.3,
+    raster     = FALSE,
     cols       = c("lightgrey", "#D6604D")
   ) +
     ggtitle(paste(GENE, "expression —", REGION_LABEL, "(SEA-AD)")) +
@@ -433,6 +434,7 @@ if ("umap" %in% names(seu@reductions)) {
     pt.size    = 0.3,
     label      = TRUE,
     repel      = TRUE,
+    raster     = FALSE,
     cols       = ct_colors
   ) + ggtitle("Cell types") + theme_classic(base_size = 12) +
     NoLegend()
@@ -442,6 +444,7 @@ if ("umap" %in% names(seu@reductions)) {
     reduction = "umap",
     group.by  = "ADNC",
     pt.size   = 0.3,
+    raster    = FALSE,
     cols      = ADNC_COLORS
   ) + ggtitle("ADNC status") + theme_classic(base_size = 12)
 
