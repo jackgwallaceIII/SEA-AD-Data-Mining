@@ -415,38 +415,45 @@ ct_colors <- setNames(
 # ---- 6a. UMAP colored by TRAPPC9 expression (if UMAP available) ------------
 if ("umap" %in% names(seu@reductions)) {
   message("  Plotting UMAP...")
+  umap_theme <- theme_void(base_size = 12) +
+    theme(
+      plot.title      = element_text(face = "bold", hjust = 0.5, size = 12),
+      legend.text     = element_text(size = 9),
+      legend.key.size = unit(0.4, "cm")
+    )
+
   p_umap_gene <- FeaturePlot(
     seu,
     features   = GENE,
     reduction  = "umap",
     order      = TRUE,
-    pt.size    = 0.3,
+    pt.size    = 0.2,
+    alpha      = 0.6,
     raster     = FALSE,
     cols       = c("lightgrey", "#D6604D")
-  ) +
-    ggtitle(paste(GENE, "expression —", REGION_LABEL, "(SEA-AD)")) +
-    theme_classic(base_size = 12)
+  ) + ggtitle(paste(GENE, "—", REGION_LABEL)) + umap_theme
 
   p_umap_ct <- DimPlot(
     seu,
     reduction  = "umap",
     group.by   = CELLTYPE_COL,
-    pt.size    = 0.3,
+    pt.size    = 0.2,
+    alpha      = 0.5,
     label      = TRUE,
     repel      = TRUE,
     raster     = FALSE,
     cols       = ct_colors
-  ) + ggtitle("Cell types") + theme_classic(base_size = 12) +
-    NoLegend()
+  ) + ggtitle("Cell type") + umap_theme + NoLegend()
 
   p_umap_adnc <- DimPlot(
     seu,
     reduction = "umap",
     group.by  = "ADNC",
-    pt.size   = 0.3,
+    pt.size   = 0.2,
+    alpha     = 0.4,
     raster    = FALSE,
     cols      = ADNC_COLORS
-  ) + ggtitle("ADNC status") + theme_classic(base_size = 12)
+  ) + ggtitle("ADNC status") + umap_theme
 
   p_umap_combined <- (p_umap_gene | p_umap_ct | p_umap_adnc)
 
