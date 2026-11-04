@@ -1,0 +1,18 @@
+# Downloaded ABC Atlas data (~16 GB) — re-fetch with abc_atlas_access
+abc_cache/
+
+# Large data outputs
+*.h5ad
+*.h5
+*.zarr/
+*.parquet
+results/*.csv
+results/*.csv.gz
+
+# Python / OS / editor
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+.vscode/
+.env

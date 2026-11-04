@@ -1,0 +1,85 @@
+
+======================================================================
+FILE
+======================================================================
+path: abc_cache/expression_matrices/SEA-AD-Multiregion-10X/20260630/MTG-10X-raw.h5ad
+size: 15.19 GB
+
+======================================================================
+HDF5 STRUCTURE (top level)
+======================================================================
+  X                group
+  layers           group
+  obs              group
+  obsm             group
+  obsp             group
+  uns              group
+  var              group
+  varm             group
+  varp             group
+
+  X encoding: csr_matrix
+  X shape:    [1178694   36601]
+  X members:  ['data', 'indices', 'indptr']
+  X data dtype: int32
+  X nnz:        6,610,518,171
+
+  layers: []
+  obsm:   []
+
+======================================================================
+ANNDATA (backed, X left on disk)
+======================================================================
+shape: 1,178,694 nuclei x 36,601 genes
+X in memory: False
+
+======================================================================
+obs COLUMNS
+======================================================================
+['cell_barcode', 'barcoded_cell_sample_label', 'library_label', 'alignment_job_id']
+
+======================================================================
+obs HEAD
+======================================================================
+                              cell_barcode barcoded_cell_sample_label       library_label alignment_job_id
+cell_label                                                                                                
+AAACCCAAGGAAGAAC-414_F09  AAACCCAAGGAAGAAC                    414_F09  L8TX_210513_01_F09       1142430431
+AAACCCAGTTGACTAC-414_F09  AAACCCAGTTGACTAC                    414_F09  L8TX_210513_01_F09       1142430431
+AAACCCAGTTTGGAGG-414_F09  AAACCCAGTTTGGAGG                    414_F09  L8TX_210513_01_F09       1142430431
+AAACCCATCTATGTGG-414_F09  AAACCCATCTATGTGG                    414_F09  L8TX_210513_01_F09       1142430431
+AAACCCATCTGGCCTT-414_F09  AAACCCATCTGGCCTT                    414_F09  L8TX_210513_01_F09       1142430431
+
+======================================================================
+obs DTYPES
+======================================================================
+cell_barcode                  category
+barcoded_cell_sample_label    category
+library_label                 category
+alignment_job_id              category
+
+======================================================================
+CATEGORICAL COLUMNS — level counts
+======================================================================
+  cell_barcode                             1,033,197 levels
+  barcoded_cell_sample_label                    205 levels
+  library_label                                 205 levels
+  alignment_job_id                              205 levels
+
+======================================================================
+var COLUMNS
+======================================================================
+['gene_symbol', 'feature_types', 'genome']
+                 gene_symbol    feature_types  genome
+gene_identifier                                      
+ENSG00000243485  MIR1302-2HG  Gene Expression  GRCh38
+ENSG00000237613      FAM138A  Gene Expression  GRCh38
+ENSG00000186092        OR4F5  Gene Expression  GRCh38
+ENSG00000238009   AL627309.1  Gene Expression  GRCh38
+ENSG00000239945   AL627309.3  Gene Expression  GRCh38
+
+======================================================================
+MISSING VALUES in obs
+======================================================================
+  none
+
+Done. Nothing was modified.
