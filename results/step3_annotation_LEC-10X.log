@@ -1,0 +1,187 @@
+
+======================================================================
+RELEASE
+======================================================================
+  manifest: releases/20261101/manifest.json
+  (newer release exists: releases/20261130/manifest.json — staying on the pin)
+  region: LEC-10X
+  output: /Users/wallace/Desktop/PhD/Bioinformatics/SEA-AD-snRNA-New/results/step3_annotation_LEC-10X.csv
+
+======================================================================
+SCHEMAS
+======================================================================
+cell_metadata (cell_metadata.csv):
+  ['cell_label', 'cell_barcode', 'barcoded_cell_sample_label', 'library_label', 'alignment_job_id', 'doublet_score', 'umi_count', 'donor_label', 'exp_component_name', 'feature_matrix_label', 'dataset_label']
+
+cell_to_cluster_membership:
+  ['cell_label', 'cluster_alias', 'label']
+                  cell_label  cluster_alias                label
+0  AAACAGCCACTGGCTG-2001_A08             84  CS20260630_SUPR_084
+1  AAACAGCCAGGTTATT-2001_A08            180  CS20260630_SUPR_180
+2  AAACAGCCATTCCTCG-2001_A08            113  CS20260630_SUPR_113
+
+cluster_to_cluster_annotation_membership: (621, 5)
+  ['cluster_annotation_term_label', 'cluster_annotation_term_set_name', 'cluster_annotation_term_name', 'cluster_alias', 'cluster_annotation_term_set_label']
+  cluster_annotation_term_label cluster_annotation_term_set_name cluster_annotation_term_name  cluster_alias cluster_annotation_term_set_label
+0           CS20260630_CLAS_001                            Class          Neuronal: GABAergic              1               CCN20260630_LEVEL_0
+1           CS20260630_CLAS_001                            Class          Neuronal: GABAergic              2               CCN20260630_LEVEL_0
+2           CS20260630_CLAS_001                            Class          Neuronal: GABAergic              3               CCN20260630_LEVEL_0
+
+resolved: cm[cell_label, feature_matrix_label] ccm[cell_label, cluster_alias] cam[cluster_alias, cluster_annotation_term_set_name, cluster_annotation_term_name]
+
+======================================================================
+cell_metadata -> LEC-10X
+======================================================================
+  rows scanned (all regions): 8,641,342
+  rows kept (LEC-10X):       239,721
+  unique cell_label:            239,721
+  donors:                     34
+
+======================================================================
+RESTRICT TO MATRIX
+======================================================================
+  nuclei in cell_metadata (LEC-10X): 239,721
+  nuclei in released matrix:          182,260
+  kept (present in both):             182,260
+  DROPPED (metadata only, no X):      57,461 (24.0% of metadata rows)
+  nuclei in matrix but not metadata:  0  (as required)
+
+======================================================================
+cell_to_cluster_membership
+======================================================================
+  rows for LEC-10X: 182,260
+  unique clusters:   144
+
+======================================================================
+cluster -> annotation levels
+======================================================================
+  term sets present: ['Class', 'Subclass', 'Supertype']
+  clusters annotated: 207
+   cluster_alias                class    subclass           supertype
+0              1  Neuronal: GABAergic  Lamp5 Lhx6        Lamp5_Lhx6_1
+1              2  Neuronal: GABAergic  Lamp5 Lhx6  Lamp5_Lhx6_2-SEAAD
+2              3  Neuronal: GABAergic  Lamp5 Lhx6  Lamp5_Lhx6_3-SEAAD
+
+======================================================================
+donor + disease
+======================================================================
+  donor cols kept:   ['donor_label', 'donor_sex', 'donor_age_value', 'PMI', 'Brain pH']
+  disease cols kept: ['donor_label', 'Overall AD neuropathological Change', 'Thal', 'Braak', 'CERAD score', 'Cognitive Status', 'APOE Genotype', 'CPS_Global', 'Severely Affected Donor', 'LATE']
+
+======================================================================
+MERGE
+======================================================================
+  baseline (nuclei in matrix): 182,260
+  + cluster             182,260  (expected 182,260)
+  + annotation          182,260
+  + donor               182,260
+  + disease             182,260
+  + QC metrics          182,260
+
+======================================================================
+CROSS-CHECK — umi_count vs total_counts
+======================================================================
+  nuclei compared:      182,260
+  pearson r:            1.000000
+  max |difference|:     0
+  nuclei differing >1:  0
+
+======================================================================
+COMPLETENESS
+======================================================================
+  no missing values
+
+======================================================================
+COMPOSITION
+======================================================================
+
+  class (3 levels):
+class
+Neuronal: Glutamatergic        84372
+Neuronal: GABAergic            50224
+Non-neuronal and Non-neural    47664
+
+  subclass (24 levels):
+subclass
+EC IT                  57904
+Astrocyte              15834
+Vip                    13777
+Oligodendrocyte        13350
+Immune                 11791
+L6 CT                  10429
+Pvalb                   9667
+Lamp5                   7073
+L6b                     6690
+Sst                     6612
+Lamp5 Lhx6              5941
+OPC                     5443
+L5 IT                   4807
+L6 IT                   4098
+Pax6                    2685
+Chandelier              2112
+Sncg                    1885
+VLMC & Perivascular      930
+Sst Chodl                472
+Endothelial              316
+L5 ET                    210
+L2/3 IT                  172
+Sub-CA1                   42
+L5/6 NP                   20
+
+  supertype (144 levels):
+supertype
+EC IT_1                22877
+EC IT_4                14590
+EC IT_2                13406
+Oligo_2                 8741
+Micro-PVM_2             8485
+L6 CT_5-SEAAD           8276
+Astro_2                 7330
+OPC_2                   5008
+L6b_6                   4942
+Lamp5_Lhx6_1            4847
+EC IT_3                 3759
+Astro_3                 3373
+Astro_1                 3303
+EC IT_5                 3068
+Lamp5_2                 2681
+Oligo_4                 2654
+Vip_19                  2330
+L5 IT_7                 2120
+Pvalb_15                2089
+Lamp5_3                 2087
+Sst_3                   2072
+Vip_4                   1757
+Vip_1                   1725
+Pvalb_1                 1630
+Micro-PVM_2_3-SEAAD     1490
+L6 CT_7-SEAAD           1422
+Chandelier_1            1321
+Vip_23                  1306
+Micro-PVM_3-SEAAD       1295
+L6 IT_7-SEAAD           1250
+L5 IT_5                 1172
+Pvalb_9                 1138
+Vip_15                  1131
+L6b_8-SEAAD             1083
+Pvalb_5                 1040
+
+  CPS_Global across donors:
+count    34.000000
+mean      0.541446
+std       0.319357
+min       0.017732
+25%       0.208798
+50%       0.538446
+75%       0.831016
+max       0.964841
+
+======================================================================
+WRITE
+======================================================================
+  /Users/wallace/Desktop/PhD/Bioinformatics/SEA-AD-snRNA-New/results/step3_annotation_LEC-10X.csv  (47.0 MB)
+  182,260 nuclei x 27 columns
+
+  57,461 metadata-only nuclei were dropped (no expression
+  data, no cell type). No QC filtering was applied to the rest.
+  No expression data was read.

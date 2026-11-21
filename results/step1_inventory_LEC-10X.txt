@@ -1,0 +1,93 @@
+
+======================================================================
+RELEASE
+======================================================================
+  manifest: releases/20261101/manifest.json
+  (newer release exists: releases/20261130/manifest.json — staying on the pin)
+  region:        LEC-10X
+  normalization: raw
+
+======================================================================
+FILE
+======================================================================
+path: /Users/wallace/Desktop/PhD/Bioinformatics/SEA-AD-snRNA-New/abc_cache/expression_matrices/SEA-AD-Multiregion-10X/20260630/LEC-10X-raw.h5ad
+size: 2.05 GB
+
+======================================================================
+HDF5 STRUCTURE (top level)
+======================================================================
+  X                group
+  layers           group
+  obs              group
+  obsm             group
+  obsp             group
+  uns              group
+  var              group
+  varm             group
+  varp             group
+
+  X encoding: csr_matrix
+  X shape:    [182260  36601]
+  X members:  ['data', 'indices', 'indptr']
+  X data dtype: int32
+  X nnz:        894,343,736
+
+  layers: []
+  obsm:   []
+
+======================================================================
+ANNDATA (backed, X left on disk)
+======================================================================
+shape: 182,260 nuclei x 36,601 genes
+X in memory: False
+
+======================================================================
+obs COLUMNS
+======================================================================
+['cell_barcode', 'barcoded_cell_sample_label', 'library_label', 'alignment_job_id']
+
+======================================================================
+obs HEAD
+======================================================================
+                               cell_barcode barcoded_cell_sample_label       library_label alignment_job_id
+cell_label                                                                                                 
+AAACAGCCAAGGTCGA-1836_A04  AAACAGCCAAGGTCGA                   1836_A04  L8XR_230831_01_H04       1298390356
+AAACAGCCACAGCCTG-1836_A04  AAACAGCCACAGCCTG                   1836_A04  L8XR_230831_01_H04       1298390356
+AAACAGCCACCGTTCC-1836_A04  AAACAGCCACCGTTCC                   1836_A04  L8XR_230831_01_H04       1298390356
+AAACAGCCACTAAGAA-1836_A04  AAACAGCCACTAAGAA                   1836_A04  L8XR_230831_01_H04       1298390356
+AAACAGCCAGTTAAAG-1836_A04  AAACAGCCAGTTAAAG                   1836_A04  L8XR_230831_01_H04       1298390356
+
+======================================================================
+obs DTYPES
+======================================================================
+cell_barcode                  category
+barcoded_cell_sample_label    category
+library_label                 category
+alignment_job_id              category
+
+======================================================================
+CATEGORICAL COLUMNS — level counts
+======================================================================
+  cell_barcode                              161,803 levels
+  barcoded_cell_sample_label                     34 levels
+  library_label                                  34 levels
+  alignment_job_id                               34 levels
+
+======================================================================
+var COLUMNS
+======================================================================
+['gene_symbol', 'feature_types', 'genome']
+                 gene_symbol    feature_types  genome
+gene_identifier                                      
+ENSG00000243485  MIR1302-2HG  Gene Expression  GRCh38
+ENSG00000237613      FAM138A  Gene Expression  GRCh38
+ENSG00000186092        OR4F5  Gene Expression  GRCh38
+ENSG00000238009   AL627309.1  Gene Expression  GRCh38
+ENSG00000239945   AL627309.3  Gene Expression  GRCh38
+
+======================================================================
+MISSING VALUES in obs
+======================================================================
+  none
+
+Done. Nothing was modified.

@@ -1,8 +1,16 @@
 
 ======================================================================
+RELEASE
+======================================================================
+  manifest: releases/20261101/manifest.json
+  (newer release exists: releases/20261130/manifest.json — staying on the pin)
+  region:        MTG-10X
+  normalization: raw
+
+======================================================================
 FILE
 ======================================================================
-path: abc_cache/expression_matrices/SEA-AD-Multiregion-10X/20260630/MTG-10X-raw.h5ad
+path: /Users/wallace/Desktop/PhD/Bioinformatics/SEA-AD-snRNA-New/abc_cache/expression_matrices/SEA-AD-Multiregion-10X/20260630/MTG-10X-raw.h5ad
 size: 15.19 GB
 
 ======================================================================
