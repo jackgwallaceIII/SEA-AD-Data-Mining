@@ -19,7 +19,7 @@ msgspec==0.22.0
 natsort==8.4.0
 numcodecs==0.17.1
 numpy==2.5.4
-packaging @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_packaging_1785888127/work
+packaging==26.3
 pandas==3.1.0
 pillow==13.0.0
 pydantic==2.14.2
