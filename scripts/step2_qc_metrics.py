@@ -1,5 +1,5 @@
 """
-step2_qc_metrics.py — SEA-AD MTG: compute per-nucleus QC metrics.
+step2_qc_metrics.py — SEA-AD: per-nucleus QC metrics for one region.
 
 Computes metrics only. NOTHING is filtered and the h5ad is not modified.
 Output is one CSV, one row per nucleus, written to results/.
@@ -47,14 +47,25 @@ Decisions made here, and why:
    Allen's umi_count for the same nucleus, something is wrong with the
    row alignment and it needs finding before anything downstream.
 
-Runtime: this reads roughly 53 GB off disk. Expect on the order of
-10-25 minutes. Progress prints per chunk.
+6. THE REGION IS A PARAMETER AND THE OUTPUT IS NAMED FOR IT.
+   All ten regions in this release share the same gene set, taxonomy and
+   CSR layout, so this computation is region-independent; only the matrix
+   differs. The output carries the region in its filename, because a
+   fixed name would be silently overwritten by the next region analysed
+   and step3 would then join one region's QC metrics to another region's
+   annotations. raw counts are required — log2 is pre-normalized, and
+   summing it gives a meaningless total.
+
+Runtime: scales with the matrix. MTG is 15.19 GB / 6.61e9 nonzeros and
+takes about 5 minutes; the smallest region (LEC, 2.05 GB) is well under
+one. Progress prints per chunk.
 
 Run from the project root:
     python scripts/step2_qc_metrics.py
+    python scripts/step2_qc_metrics.py --region HIP
 """
 
-import pathlib
+import argparse
 import time
 
 import anndata as ad
@@ -62,10 +73,8 @@ import h5py
 import numpy as np
 import pandas as pd
 
-H5AD = pathlib.Path(
-    "abc_cache/expression_matrices/SEA-AD-Multiregion-10X/20260630/MTG-10X-raw.h5ad"
-)
-OUT = pathlib.Path("results/step2_qc_metrics.csv")
+import seaad
+from seaad import section
 
 # Rows per chunk. At ~5,600 nonzeros per nucleus on average, 20,000 rows
 # is roughly 112M nonzeros, or ~900 MB for data + indices together.
@@ -73,16 +82,23 @@ OUT = pathlib.Path("results/step2_qc_metrics.csv")
 CHUNK_ROWS = 20_000
 
 
-def section(title):
-    print("\n" + "=" * 70)
-    print(title)
-    print("=" * 70)
-
-
 def main():
-    if not H5AD.exists():
-        raise SystemExit(f"Not found: {H5AD}\nRun from the project root.")
-    OUT.parent.mkdir(parents=True, exist_ok=True)
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
+    seaad.add_region_args(ap)
+    ap.add_argument("--chunk-rows", type=int, default=CHUNK_ROWS,
+                    metavar="N", help=f"rows per read (default: {CHUNK_ROWS:,})")
+    args = ap.parse_args()
+
+    section("RELEASE")
+    _, manifest = seaad.open_cache()
+    region = seaad.resolve_region(manifest, args.region)
+    # raw only: see decision 6. QC totals over log2 values are meaningless.
+    H5AD = seaad.h5ad_path(manifest, region, "raw")
+    OUT = seaad.qc_csv(region)
+    chunk_rows = args.chunk_rows
+    print(f"  region: {region}")
+    print(f"  matrix: {H5AD.name} ({H5AD.stat().st_size / 1e9:.2f} GB)")
+    print(f"  output: {OUT}")
 
     # ---- Gene annotation, and the two gene sets we need ----------------
     # var is small, so read it through anndata in backed mode. X stays on
@@ -141,9 +157,9 @@ def main():
         mito_counts = np.zeros(n_obs, dtype=np.float64)
         ribo_counts = np.zeros(n_obs, dtype=np.float64)
 
-        n_chunks = int(np.ceil(n_obs / CHUNK_ROWS))
-        for c, r0 in enumerate(range(0, n_obs, CHUNK_ROWS)):
-            r1 = min(r0 + CHUNK_ROWS, n_obs)
+        n_chunks = int(np.ceil(n_obs / chunk_rows))
+        for c, r0 in enumerate(range(0, n_obs, chunk_rows)):
+            r1 = min(r0 + chunk_rows, n_obs)
 
             # One contiguous read per array for this block of rows.
             lo, hi = int(indptr[r0]), int(indptr[r1])

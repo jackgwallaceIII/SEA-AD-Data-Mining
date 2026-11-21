@@ -1,5 +1,5 @@
 """
-step1_inventory.py — SEA-AD MTG, load and inventory only.
+step1_inventory.py — SEA-AD: load and inventory one region's matrix.
 
 Purpose: confirm what is actually in the downloaded matrix before any
 filtering, QC, or analysis. Nothing is modified and nothing is written.
@@ -21,32 +21,42 @@ Decisions made here, and why:
    type. Filtering decisions come after seeing what the distributions
    look like, not before.
 
+4. The region is a parameter. The ten regions in this release are
+   structurally identical — same genes, same taxonomy, same CSR layout —
+   so this step works on any of them, and the path is resolved from the
+   pinned manifest rather than typed. MTG is the default because it is
+   what this project analyses; see decision 1 in step0_discover.py.
+
 Run from the project root:
     python scripts/step1_inventory.py
+    python scripts/step1_inventory.py --region HIP
+    python scripts/step1_inventory.py --region DFC-10X --normalization log2
 """
 
-import pathlib
-import h5py
+import argparse
+
 import anndata as ad
+import h5py
 import pandas as pd
+
+import seaad
+from seaad import section
 
 pd.set_option("display.width", 200)
 pd.set_option("display.max_columns", 50)
 
-H5AD = pathlib.Path(
-    "abc_cache/expression_matrices/SEA-AD-Multiregion-10X/20260630/MTG-10X-raw.h5ad"
-)
-
-
-def section(title):
-    print("\n" + "=" * 70)
-    print(title)
-    print("=" * 70)
-
 
 def main():
-    if not H5AD.exists():
-        raise SystemExit(f"Not found: {H5AD}\nRun from the project root.")
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
+    seaad.add_region_args(ap, normalization=True)
+    args = ap.parse_args()
+
+    section("RELEASE")
+    _, manifest = seaad.open_cache()
+    region = seaad.resolve_region(manifest, args.region)
+    H5AD = seaad.h5ad_path(manifest, region, args.normalization)
+    print(f"  region:        {region}")
+    print(f"  normalization: {args.normalization}")
 
     section("FILE")
     print(f"path: {H5AD}")
