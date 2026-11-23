@@ -23,23 +23,34 @@ Allen Brain Cell (ABC) Atlas. That pipeline is still here, described
 ```bash
 git clone https://github.com/jackgwallaceIII/SEA-AD-Data-Mining.git
 cd SEA-AD-Data-Mining
-
-conda create -n seaad python=3.12 -y
+conda create -n seaad python=3.12
 conda activate seaad
 pip install -r requirements-lock.txt
-
 python -m unittest discover -s tests -t tests
 python scripts/index.py start
+```
+
+**Already have an environment called `seaad`?** `conda create` will say
+so and ask *"Remove existing environment?"*. Answer **n**: replacing it
+deletes everything installed in it. Skip `conda create` and run only:
+
+```bash
+conda activate seaad
+pip install -r requirements-lock.txt
 ```
 
 The tests need no data or network and take about 8 seconds; in a fresh
 clone 19 skip, because they check RNA-seq pipeline files you have not
 made or fetched yet. `start` checks your setup, shows what is already
-here, and walks through the workflow with commands you can copy. **Run `start` first**; everything
-below is also printed there.
+here, and walks through the workflow with commands you can copy. **Run
+`start` first**; everything below is also printed there.
 
-Each new terminal starts in conda `base`, where the packages are not
-installed. Run `conda activate seaad` before any command.
+Two things that trip people up:
+
+- Each new terminal starts in conda `base`, where the packages are not
+  installed. Run `conda activate seaad` before any command.
+- Run commands from inside the `SEA-AD-Data-Mining` folder. Elsewhere,
+  the tests stop with *"Start directory is not importable: 'tests'"*.
 
 ---
 

@@ -66,6 +66,20 @@ class TestSetup(StartCase):
         self.assertIn("conda activate seaad", text)
         self.assertIn("pip install -r requirements-lock.txt", text)
 
+    def test_fix_never_replaces_an_environment_without_asking(self):
+        # 'conda create -y' silently replaces an existing environment; this
+        # happened for real. Without -y, conda asks first.
+        _, text = self.run_start(env_check=env(missing={"boto3"}))
+        create = [ln for ln in text.splitlines() if "conda create" in ln]
+        self.assertTrue(create)
+        self.assertFalse(any("-y" in ln.split() for ln in create))
+
+    def test_readme_quickstart_never_replaces_an_environment_without_asking(self):
+        readme = (pathlib.Path(start.__file__).resolve().parent.parent / "README.md").read_text()
+        create = [ln for ln in readme.splitlines() if ln.strip().startswith("conda create")]
+        self.assertTrue(create)
+        self.assertFalse(any("-y" in ln.split() for ln in create))
+
     def test_conda_base_is_called_out(self):
         _, text = self.run_start(env_check=env(missing={"h5py"}, conda="base"))
         self.assertIn("You are in conda 'base'", text)

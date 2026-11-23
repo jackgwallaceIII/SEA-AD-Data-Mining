@@ -146,11 +146,12 @@ def run(region=None, catalog_dir=None, data_dir=None, report_dir=None, env_check
     if not ok:
         out("\n   Something required is missing. In the project folder, run:")
         out("     conda activate seaad")
-        out("   If that environment does not exist yet, create it and install the pinned "
-            "versions:")
-        out("     conda create -n seaad python=3.12 -y")
-        out("     conda activate seaad")
         out("     pip install -r requirements-lock.txt")
+        out("   If 'conda activate seaad' says the environment does not exist, create it "
+            "first:")
+        out("     conda create -n seaad python=3.12")
+        out("   (No -y on purpose: if a 'seaad' environment already exists, conda asks before "
+            "replacing it. Answer n.)")
         if env["conda_env"] == "base":
             out("   (You are in conda 'base', the usual cause: the packages live in 'seaad'.)")
 
