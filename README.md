@@ -1,238 +1,338 @@
-# SEA-AD snRNA-seq pipeline
+# SEA-AD Data Mining
 
-Per-nucleus QC and annotation for the [SEA-AD](https://portal.brain-map.org/explore/seattle-alzheimers-disease)
-multiregion single-nucleus RNA-seq release, served through the Allen
-Brain Cell (ABC) Atlas. Built around microglia in middle temporal gyrus
-(MTG), but every step takes `--region` and works on any of the ten
-regions in the release.
+Find, preview, fetch and describe data from the
+[Seattle Alzheimer's Disease Brain Cell Atlas (SEA-AD)](https://brain-map.org/consortia/sea-ad/our-data):
+single-nucleus RNA-seq and ATAC-seq, spatial transcriptomics (MERFISH,
+Xenium), neuropathology slides and quantification, and the cohort's
+donor, MRI and cognitive spreadsheets.
 
-**You do not need the data to get started.** It is not in this
-repository and does not need to be sent to you — it is pinned to a
-versioned manifest with an md5 per file, so the fetch script rebuilds a
-byte-identical copy from the Allen S3 bucket.
+You pick a brain region and a data type. The tool shows what exists and
+how big it is, downloads only what you approve, checks every file
+against the server's checksum, and writes a short **structure report**
+for the next person: shapes, column names, number types, and whether a
+matrix holds raw counts. It never shows the data's contents.
+
+The repository started as an RNA-seq QC and annotation pipeline on the
+Allen Brain Cell (ABC) Atlas. That pipeline is still here, described
+[further down](#the-rna-seq-qc-and-annotation-pipeline-abc-atlas).
 
 ---
 
 ## Quickstart
 
 ```bash
-git clone https://github.com/jackgwallaceIII/SEA-AD-scRNA-analysis.git
-cd SEA-AD-scRNA-analysis
+git clone https://github.com/jackgwallaceIII/SEA-AD-Data-Mining.git
+cd SEA-AD-Data-Mining
 
 conda create -n seaad python=3.12 -y
 conda activate seaad
 pip install -r requirements-lock.txt
 
-# Check it works before downloading anything (should be ~45 passed, 15 skipped)
 python -m unittest discover -s tests -t tests
+python scripts/index.py start
+```
 
-# Get the data: 9 files, 17.1 GB, md5-verified
+The tests need no data or network and take about 8 seconds; in a fresh
+clone 19 skip, because they check RNA-seq pipeline files you have not
+made or fetched yet. `start` checks your setup, shows what is already
+here, and walks through the workflow with commands you can copy. **Run `start` first**; everything
+below is also printed there.
+
+Each new terminal starts in conda `base`, where the packages are not
+installed. Run `conda activate seaad` before any command.
+
+---
+
+## The workflow: look, read, preview, download, describe
+
+Every command is `python scripts/index.py <command>`. Shown here for LEC;
+any region name or code works (see [Regions](#regions)).
+
+**1. Look at what exists.** These read the local catalog and are instant.
+
+```bash
+python scripts/index.py show
+python scripts/index.py show LEC
+python scripts/index.py show LEC --files
+python scripts/index.py search final-nuclei
+python scripts/index.py sources
+python scripts/index.py issues
+```
+
+**2. Read the region's structure report.**
+
+```bash
+python scripts/index.py report LEC
+open results/reports/LEC.md
+```
+
+**3. Preview a download.** Nothing is transferred.
+
+```bash
+python scripts/index.py get LEC --product "cell metadata table" --dry-run
+python scripts/index.py get --external web-donor-metadata --dry-run
+```
+
+**4. Download.** Use the same command without `--dry-run`. It prints the
+plan and asks `y/N` before transferring anything.
+
+```bash
+python scripts/index.py get LEC --product "cell metadata table" --match final-nuclei
+```
+
+**5. Describe what you downloaded.**
+
+```bash
+python scripts/index.py inspect --downloaded
+python scripts/index.py report --all
+```
+
+Per-file reports go to `results/inspect/<source>/<path>.md` (and `.json`);
+region pages and an index go to `results/reports/`.
+
+### Big folders and images, without downloading them
+
+```bash
+python scripts/index.py get --descriptors --match "caudate_nucleus/H20.33.001/1417642733/combined_spatialdata_zarr/" --dry-run
+python scripts/index.py peek --match "1193169898/DAPI_Max.tif" --dry-run
+```
+
+- `get --descriptors` fetches only the small files that describe a Zarr
+  store or a Xenium bundle: about 100 KB out of several GB.
+- `peek` reads only an image's header from S3, a few hundred KB out of
+  1 to 7 GB, and saves nothing.
+
+Both preview first and ask before reading.
+
+---
+
+## What it covers
+
+| Source | Access | What is in it |
+|---|---|---|
+| `sea-ad-single-cell-profiling` (S3) | open | snRNA-seq for 11 regions (2026 release), snATAC-seq for MTG and PFC (2024 release), per-donor objects, coverage tracks, model outputs |
+| `sea-ad-spatial-transcriptomics` (S3) | open | MERFISH (MTG) and Xenium (caudate): images, SpatialData stores, transcript tables; plus one mapped cell-by-gene h5ad each for HIP and MEC |
+| `sea-ad-quantitative-neuropathology` (S3) | open | whole-slide images, analysis masks, deep-zoom tile pyramids, quantification tables |
+| SEA-AD website spreadsheets | open | donor metadata, MRI volumetrics, Luminex (MTG), quantitative neuropathology, pseudoprogression scores, cognitive scores, imaging availability |
+| AD Knowledge Portal: `syn26223298` (raw data), `syn64410371` (Integrative Analysis Center) | controlled | linked only; this tool never downloads them |
+| Allen Brain Cell Atlas | open | the RNA-seq matrices used by the pipeline below |
+
+The three buckets hold about 9.2 TB of current data in 45,711 catalog
+units (a unit is a file, or a folder treated as one item). There is
+another 570 GB in deprecated `previous_objects/` folders, which are
+hidden unless you ask for them.
+
+- **The catalog** is `catalog/files/<bucket>.csv.gz`, built by listing the
+  buckets. If your copy has no `catalog/files/`, build it; this lists
+  the buckets and downloads nothing:
+  `python scripts/index.py refresh --bucket sea-ad-single-cell-profiling`
+  (repeat for the other two buckets). The single-cell bucket has about
+  1.9 million objects, so the listing takes a while.
+- **Website files** are listed by hand in `catalog/external_sources.csv`.
+  `python scripts/index.py sources --check` asks each one for its size
+  and date without downloading it.
+
+---
+
+## What it will and will not do
+
+- **Nothing downloads without a preview and your yes.** That covers full
+  files, header peeks and descriptor fetches. `--dry-run` only previews.
+  `--max-gb` (default 50) refuses large transfers. With no terminal to
+  ask, it refuses unless you pass `--yes`.
+- **Controlled-access data is linked, never downloaded,** under any flags.
+- **Every download is verified.** The file is written to a `.part` file,
+  checked against the server's checksum and size, and only then renamed.
+  A SHA-256 goes into `data_cache/_ledger.csv`, so you can always tell
+  which bytes an analysis used. If a file changed on S3 after the catalog
+  was built, the download stops.
+- **Reports show structure, not contents.** Never shown:
+  - donor IDs, barcodes and library names;
+  - free text, such as clinical "describe" fields;
+  - category values in files with fewer than 5 donors;
+  - scanner notes in slide images;
+  - Xenium run identifiers;
+  - names and e-mail addresses inside panel files.
+- **Read-only against S3.** Listing and header checks need no approval
+  because no content moves.
+
+Downloads go to `data_cache/`, which is gitignored.
+
+---
+
+## Reading the reports: what you can and cannot conclude
+
+- **"Raw counts or normalised?"** For each matrix in an h5ad, the report
+  judges this from a sample of up to a million stored values. Whole
+  numbers suggest raw counts, decimals mean normalised or log values,
+  negatives mean scaled data, and 0/1 means binarised. Treat it as a
+  strong hint, not proof. For SEA-AD RNA objects checked so far, `X` is
+  normalised and `layers["UMIs"]` holds the raw counts. Use the latter
+  for QC and differential expression.
+- **"Checked on 1 of 86"** means one example file was opened. It stands
+  for the others only as far as they were made the same way. Region
+  pages list the kinds of file nobody has opened yet.
+- **Missing counts are rows, not donors.** In a per-nucleus table, one
+  donor without a value adds all of their nuclei to the missing count.
+- **Known upstream issues** (`python scripts/index.py issues`) are
+  problems found in the data itself. Each comes with its evidence and the
+  date it was found, and `show`, `get`, `inspect` and the region pages
+  print them wherever they apply. Examples:
+  - a track-hub file whose 96 links point to a folder that does not exist;
+  - ATAC cell-type names that differ from the 2026 RNA release;
+  - MERFISH images with no pixel size.
+
+---
+
+## Regions
+
+Region codes, anatomical names and common abbreviations all work, e.g.
+`DFC`, `PFC`, `DLPFC`, `prefrontal` and `A9`. Ambiguous words are refused
+rather than guessed: `temporal` matches ITG, MTG and STG.
+
+| code | region |
+|---|---|
+| AnG | angular gyrus |
+| CaH | head of caudate |
+| DFC | dorsolateral prefrontal cortex |
+| ESOC | extrastriate occipital cortex |
+| FI | agranular frontal insular cortex (area FI) |
+| HIP | hippocampus |
+| ITG | inferior temporal gyrus |
+| LEC | lateral (rostral) entorhinal cortex |
+| MEC | medial (caudal) entorhinal cortex |
+| MTG | middle temporal gyrus |
+| STG | superior temporal gyrus |
+| V1C | primary visual cortex |
+
+The full table, with Allen brain-atlas structure IDs, is in
+`catalog/regions.csv`. Some folders cover two regions at once (HIP+MEC,
+MTG+STG, V1C+ESOC, and the 10-region multi-region release). `show` and
+the region pages list those separately, so a region's total counts its
+own data only.
+
+---
+
+## Repository layout
+
+```
+scripts/
+  index.py          the command line: start, show, search, get, peek, inspect,
+                    report, sources, issues, refresh, reclassify, review
+  start.py          the front door: setup check, local state, the workflow
+  regions.py        region vocabulary (codes, names, aliases, atlas IDs)
+  pathrules.py      reads region, data type and product from S3 paths
+  sources.py        anonymous, read-only S3 listing
+  browse.py         show / search over the catalog
+  plan.py           download previews and their guards
+  download.py       verified downloads and the ledger
+  descriptors.py    descriptor-only fetches for Zarr stores and Xenium bundles
+  peek.py           image headers over S3 range requests
+  external.py       website files and controlled-access links
+  inspect_data.py   structure reports: CSV, h5ad/HDF5, bigWig, TIFF/SVS,
+                    deep zoom, Zarr, Xenium, Excel (images.py, stores.py,
+                    xlsx.py hold the format readers)
+  issues.py         known upstream issues
+  report.py         one page per region
+  seaad.py, step0b_fetch.py, step0-3_*.py   the RNA pipeline (below)
+catalog/
+  regions.csv, region_groups.csv   region vocabulary
+  files/<bucket>.csv.gz            per-unit catalog, one per bucket
+  catalog.csv, refresh_log.csv     summary and listing history
+  known_issues.csv                 upstream problems, with evidence
+  external_sources.csv             website files and Synapse studies
+tests/              run without data or network
+data_cache/         downloads (gitignored)
+results/inspect/    per-file structure reports
+results/reports/    per-region pages
+abc_cache/          ABC Atlas downloads for the pipeline (gitignored)
+```
+
+Every script explains its design decisions in its opening docstring,
+including what it deliberately does not do. Read it before changing a
+script.
+
+---
+
+## The RNA-seq QC and annotation pipeline (ABC Atlas)
+
+Per-nucleus QC and annotation for the SEA-AD multi-region snRNA-seq
+release, served through the ABC Atlas. It was built around microglia in
+MTG, but every step takes `--region`.
+
+```bash
 python scripts/step0b_fetch.py preset mtg
+python scripts/step0_discover.py
+python scripts/step1_inventory.py
+python scripts/step2_qc_metrics.py
+python scripts/step3_annotation.py
 ```
 
-Then run the pipeline:
+- `preset mtg` fetches 9 files, 17.1 GB, each md5-verified against a
+  pinned release manifest.
+- Steps 2 and 3 take about 5 and 4 minutes.
+- The output, `results/step3_annotation_MTG-10X.csv`, has one row per
+  nucleus (1,178,694 rows × 27 columns): cell type, donor pathology and
+  QC metrics, with no expression values.
+
+Smaller starts:
 
 ```bash
-python scripts/step0_discover.py     # provenance; no download
-python scripts/step1_inventory.py    # what is in the matrix
-python scripts/step2_qc_metrics.py   # ~5 min, writes results/
-python scripts/step3_annotation.py   # ~4 min, writes results/
-```
-
-Output is `results/step3_annotation_MTG-10X.csv` — 1,178,694 nuclei ×
-27 columns, one row per nucleus, carrying cell type, donor pathology and
-QC metrics. No expression values, so it is ~300 MB and loads in pandas.
-
-### Not ready for 17 GB?
-
-```bash
-python scripts/step0b_fetch.py preset mtg-metadata   # 1.9 GB, annotation tables only
-```
-
-Or start with the smallest region — the full pipeline on LEC is 2.05 GB
-and under two minutes of compute:
-
-```bash
+python scripts/step0b_fetch.py preset mtg-metadata
 python scripts/step0b_fetch.py get SEA-AD-Multiregion-10X LEC-10X/raw
-python scripts/step1_inventory.py  --region LEC
 python scripts/step2_qc_metrics.py --region LEC
 python scripts/step3_annotation.py --region LEC
 ```
 
----
+- `preset mtg-metadata` fetches 1.9 GB of annotation tables only.
+- The full pipeline on LEC needs 2.05 GB and under two minutes.
 
-## Pulling other data
+`step0b_fetch.py` browses and fetches anything in the ABC Atlas (`list`,
+`search`, `regions`, `get`, `presets`), with the same habits as the
+S3 tool: a size preview, `--dry-run`, `--max-gb`, and md5 checks against
+the manifest.
 
-`scripts/step0b_fetch.py` browses and fetches anything in the ABC Atlas
-— 43 directories, 599 files, 0.92 TB — not just this project's slice.
+**The release is pinned deliberately,** to `releases/20261101/manifest.json`.
+A newer one usually exists; the scripts stay on the pin, which keeps
+"which data did I use" answerable. The pin lives in `scripts/seaad.py`
+and `scripts/step0b_fetch.py`; change it only on purpose, then re-run
+every step.
 
-```bash
-# Browse
-python scripts/step0b_fetch.py regions                        # brain regions by name
-python scripts/step0b_fetch.py list                           # all directories
-python scripts/step0b_fetch.py list SEA-AD-Multiregion-10X    # files in one
-python scripts/step0b_fetch.py search PFC                     # find files anywhere
+### Things that will bite you
 
-# Fetch
-python scripts/step0b_fetch.py get SEA-AD-Multiregion-10X MTG-10X/raw
-python scripts/step0b_fetch.py get SEA-AD-Multiregion-10X --kind metadata
-python scripts/step0b_fetch.py get SEA-AD-Multiregion-10X 'HIP-10X/*' --dry-run
-
-# Named reproducible file sets
-python scripts/step0b_fetch.py presets
-python scripts/step0b_fetch.py preset mtg
-```
-
-### Regions by name, not code
-
-The region codes are opaque — the prefrontal cortex is filed as `DFC`,
-and the frontal insula as `FI`. `regions` prints the whole table with
-anatomical names (sourced from the release's own `value_sets.csv` and
-its DHBA ontology ids), sizes, and what you already have cached:
-
-| code | region | raw |
-|---|---|---|
-| `AnG-10X` | angular gyrus | 2.58 GB |
-| `DFC-10X` | dorsolateral prefrontal cortex | 17.76 GB |
-| `FI-10X` | agranular frontal insular cortex (area FI) | 2.48 GB |
-| `HIP-10X` | hippocampus | 2.41 GB |
-| `ITG-10X` | inferior temporal gyrus | 5.58 GB |
-| `LEC-10X` | lateral (rostral) entorhinal cortex | 2.05 GB |
-| `MEC-10X` | medial (caudal) entorhinal cortex | 12.51 GB |
-| `MTG-10X` | middle temporal gyrus | 15.19 GB |
-| `STG-10X` | superior temporal gyrus | 7.85 GB |
-| `V1C-10X` | primary visual cortex | 8.05 GB |
-
-76.46 GB for all ten raw matrices. Anatomical names and common
-abbreviations work everywhere a region is accepted, so for the
-prefrontal cortex all of these are equivalent:
-
-```bash
-python scripts/step0b_fetch.py get SEA-AD-Multiregion-10X PFC/raw
-python scripts/step0b_fetch.py get SEA-AD-Multiregion-10X DLPFC/raw
-python scripts/step0b_fetch.py get SEA-AD-Multiregion-10X prefrontal/raw
-python scripts/step0b_fetch.py get SEA-AD-Multiregion-10X DFC-10X/raw
-
-python scripts/step2_qc_metrics.py --region PFC
-```
-
-Ambiguous words are refused rather than guessed — `temporal` matches
-ITG, MTG and STG, and `entorhinal` matches MEC and LEC, so both error
-with the candidates listed.
-
-It will not let you download something expensive by accident:
-
-- Every fetch prints the file list with sizes and a total **before**
-  transferring, and marks what is already cached
-- `--dry-run` prints that plan and stops
-- `--max-gb` (default 50) refuses larger transfers; `--confirm-gb`
-  (default 1) prompts
-- A bare `get <directory>` with no narrowing is refused outright — for
-  `SEA-AD-Multiregion-10X` that would be 157 GB
-- md5 is verified against the manifest on every file; re-running is a
-  hash check, not a re-download
-
-Add `--yes` for unattended runs, `--force` to re-download.
+- **The matrix will not fit in memory.** 6.61e9 nonzeros need about
+  53 GB. Open it with `backed='r'` or stream row blocks; the matrix is
+  stored by row (CSR), so reading blocks of nuclei is cheap.
+  `step2_qc_metrics.py` shows the pattern.
+- **Use raw counts, not log2.** Both ship, but QC metrics need raw counts.
+- **`cell_metadata.csv` has more rows than the matrix.** For MTG it lists
+  1,861,334 nuclei against 1,178,694. The extra 36.7% were excluded from
+  the released matrix and have no expression data or cell type. Step 3
+  drops them and logs the count. The share differs by region (LEC 24.0%).
+- **Never join on `cell_barcode`.** It repeats across libraries. Use
+  `cell_label`, which is unique.
+- **Allen already filtered** at `pct_mito < 5%` and `n_genes_detected >= 500`,
+  so those distributions are truncated.
+- **`pct_mito` is not a viability signal** in single-*nucleus* data. A
+  high value means ambient or cytoplasmic carryover, not a dying cell.
+- **Microglia are in the subclass `Immune`,** with supertypes
+  `Micro-PVM_*` that lump microglia with perivascular macrophages.
+- **Subclass lists differ by region.** MTG and LEC each have 24, of which
+  22 are shared. Cross-region comparisons have to handle the rest.
 
 ---
-
-## The data
-
-| | |
-|---|---|
-| Release | `releases/20261101/manifest.json` (pinned) |
-| Directory | `SEA-AD-Multiregion-10X` + `SEA-AD-Multiregion-taxonomy` |
-| Matrix | `MTG-10X-raw.h5ad`, 15.19 GB, md5 `affce583f5b2db357022d289a9e9892a` |
-| Shape | 1,178,694 nuclei × 36,601 genes, CSR, 6.61e9 nonzeros |
-| Donors | 84, with Braak / Thal / CERAD / CPS_Global / APOE |
-
-**The release is pinned deliberately.** A newer one usually exists; the
-scripts stay on the pin and say so. This is what makes "which data did I
-use" answerable later. To move, change `MANIFEST` in `scripts/seaad.py`
-and `scripts/step0b_fetch.py`, then re-run every step.
-
-**Raw, not log2.** Both ship. QC metrics need raw counts — log2 is
-pre-normalized by choices that cannot be undone, and summing it gives a
-meaningless total.
-
-`scripts/step0_discover.py` documents why this release, this region and
-this normalization were chosen, and reproduces the evidence in about a
-minute without downloading anything.
-
----
-
-## Things that will bite you
-
-**The matrix will not fit in memory.** 6.61e9 nonzeros as int32 needs
-~53 GB for data + indices. There is no chunk size or swap setting that
-makes a full load work on a normal machine. Open it with `backed='r'`,
-or stream it in row blocks — CSR means nuclei are contiguous on disk, so
-row-block reads are cheap. `step2_qc_metrics.py` shows the pattern.
-
-**`cell_metadata.csv` has more rows than the matrix has nuclei.** It
-lists 1,861,334 for MTG against the matrix's 1,178,694. The other
-682,640 (36.7%) are nuclei Allen sequenced and kept in the metadata but
-excluded from the released matrix — they have `umi_count` and
-`doublet_score` and nothing else: no expression data, no cluster, no
-cell type. `step3_annotation.py` drops them and logs the count. The
-ratio differs by region (LEC is 24.0%).
-
-**Never join on `cell_barcode`.** It repeats across libraries —
-1,033,197 unique values for 1,178,694 nuclei. Use `cell_label`, which is
-barcode + sample suffix and is unique. Every merge in step 3 asserts its
-row count.
-
-**Allen already filtered.** `pct_mito < 5%` and `n_genes_detected >= 500`
-were applied before release, so those distributions are truncated. The
-remaining QC decisions are doublets and any tighter threshold.
-
-**`pct_mito` is not a viability signal here.** This is single-*nucleus*
-data: nuclei should contain almost no mitochondrial transcript, so an
-elevated fraction means ambient or cytoplasmic carryover, not a dying
-cell. Same for `pct_ribo`.
-
-**The microglia subclass is called `Immune`,** and its supertypes are
-`Micro-PVM_*`, which lumps microglia with perivascular macrophages. The
-taxonomy offers no label separating them; that has to be done on markers
-downstream.
-
-**Subclass vocabularies are region-specific.** MTG and LEC both have 24
-subclasses, but not the same 24 — MTG has `L4 IT` and `L6 IT Car3`, LEC
-has `EC IT` and `Sub-CA1`, with 22 shared. `Immune` is shared. Any
-cross-region comparison has to handle this.
-
----
-
-## Layout
-
-```
-scripts/
-  seaad.py              shared config: the release pin, region resolution,
-                        manifest-driven paths, output naming
-  step0b_fetch.py       browse and fetch from S3 (the only downloader)
-  step0_discover.py     provenance: why this release/region/normalization
-  step1_inventory.py    read the matrix structure before trusting it
-  step2_qc_metrics.py   per-nucleus QC by streaming CSR row blocks
-  step3_annotation.py   join cell type + donor + disease + QC
-tests/
-  test_seaad.py         path and region resolution (no data needed)
-  test_fetch.py         fetch selection and guards (no data needed)
-  test_outputs.py       regression tests on results/ (skipped if absent)
-results/                outputs, named per region; CSVs are gitignored
-abc_cache/              downloaded data; gitignored, rebuilt by step0b_fetch
-```
-
-Every script runs from any working directory and carries its reasoning
-in its own docstring — including the decisions that were *rejected* and
-why. Read the docstring before changing a step.
 
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -t tests -v
+python -m unittest discover -s tests -t tests
 ```
 
-60 tests, about 7 seconds with data present. Tests needing `results/` or
-`abc_cache/` skip automatically, so a fresh clone passes with 15 skips
-and no downloads. Stdlib `unittest` only — nothing to install beyond
-`requirements-lock.txt`.
+There are about 400 tests, taking about 8 seconds, using stdlib
+`unittest`. They use synthetic files and in-memory stand-ins for S3 and
+the web, so they need no data or network. Tests that need the RNA-seq
+pipeline's outputs (`results/*.csv`) or the cached ABC manifest
+(`abc_cache/`) skip when those are absent: in a fresh clone, expect
+`OK (skipped=19)`. The tests include
+privacy checks that plant fake donor IDs, barcodes, free text and run
+identifiers and assert they never appear in any report.
