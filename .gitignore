@@ -1,6 +1,9 @@
 # Downloaded ABC Atlas data (~16 GB) — re-fetch with abc_atlas_access
 abc_cache/
 
+# Downloaded S3 bucket data — re-fetch with `python scripts/index.py get`
+data_cache/
+
 # Large data outputs
 *.h5ad
 *.h5

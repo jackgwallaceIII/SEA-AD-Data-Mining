@@ -1,0 +1,8 @@
+id,size,etag,last_modified,content_type,checked
+web-antemortem-imaging,12756,078a82e69f697e9a9c888751b91ed19a,"Thu, 02 Oct 2025 18:01:34 GMT",application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,2026-11-22T21:39:04+00:00
+web-cognitive-scores,72465,e023e928e7b2029cdc8ebed8ca4703ad,"Thu, 02 Oct 2025 18:01:34 GMT",application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,2026-11-22T21:39:04+00:00
+web-cps,63538,d56fbfa910cd0e3cdf1bf8d3305695c7,"Wed, 01 Jul 2026 20:39:24 GMT",application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,2026-11-22T21:39:04+00:00
+web-donor-metadata,45189,38ca87641dbd36cfa88230b6c184200b,"Thu, 02 Oct 2025 18:01:34 GMT",application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,2026-11-22T21:39:04+00:00
+web-luminex-mtg,24094,f22d5974f69b64952d115694e93f4af3,"Thu, 02 Oct 2025 18:01:36 GMT",application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,2026-11-22T21:39:04+00:00
+web-mri-volumetrics,63688,9c1f4b37eb731ab8f8e51619b3f08dc4,"Thu, 02 Oct 2025 18:01:34 GMT",application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,2026-11-22T21:39:04+00:00
+web-quant-neuropath,1568221,8b458c3a133cacd3524b75844c04a810,"Wed, 01 Jul 2026 20:34:26 GMT",application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,2026-11-22T21:39:04+00:00

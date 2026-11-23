@@ -1,0 +1,13 @@
+code,name,dhba_id,aliases,notes
+MTG,middle temporal gyrus,DHBA:12141,,
+STG,superior temporal gyrus,DHBA:12140,,
+ITG,inferior temporal gyrus,DHBA:12142,,
+AnG,angular gyrus,DHBA:12136,angular,
+DFC,dorsolateral prefrontal cortex,DHBA:10173,PFC;DLPFC;dpfc;prefrontal;A9,"ABC Atlas files it as DFC-10X. sea-ad-single-cell-profiling has both DLPFC/ (pre-2026) and PFC/ (2026 release; the bucket README says the DLPFC data moved there). Both are aliased here as the same anatomical region; that does NOT mean the files in the two folders are the same data. A9 (Brodmann area 9) added 2026-11-22 on the bucket README's evidence: DREAM is described as 'the MTG and DFC datasets' and holds SEAAD_A9_*; the old DLPFC files were 'moved from DLPFC/' into PFC/previous_objects/, where the SEAAD_A9_* files are."
+FI,agranular frontal insular cortex (area FI),DHBA:10329,insula;insular,
+HIP,hippocampus (hippocampal formation),DHBA:10294,,
+LEC,lateral (rostral) entorhinal cortex,DHBA:10318,,
+MEC,medial (caudal) entorhinal cortex,DHBA:10319,,
+V1C,"primary visual cortex (striate, area 17)",DHBA:10269,v1;visual,
+CaH,head of caudate,DHBA:10335,caudate;caudate nucleus,"ABC Atlas says 'head of caudate'; the S3 buckets name the folder Caudate_Nucleus / caudate_nucleus. Verified 2026-11-22: the single-cell bucket README lists 'Caudate_Nucleus - Head of the caudate'."
+ESOC,extrastriate occipital cortex,DHBA:10270,extrastriate,"Added 2026-11-22. Not in the ABC multiregion release. SEA-AD's own code: the neuropathology table full-tabular-data/V1C-ESOC_all-values_aibs-ids_20250922.csv. DHBA id and name confirmed against the Allen DHBA ontology (structure graph 16): ESOC is the sibling of V1C under occipital neocortex (Ocx) and contains V2 (area 18) and peristriate cortex (area 19). The neuropathology slides split it from V1 as 'Higher-Order-Visual' vs 'Primary-Visual' subregions."

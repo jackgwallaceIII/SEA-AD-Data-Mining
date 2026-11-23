@@ -1,0 +1,4 @@
+alias,codes,seen_in,notes
+middle-temporal-gyrus-and-superior-temporal-gyrus,MTG;STG,sea-ad-quantitative-neuropathology,One folder covering two regions.
+hippocampus-medial-entorhinal-cortex,HIP;MEC,sea-ad-quantitative-neuropathology,One folder covering two regions (no 'and' in the name).
+primary-visual-cortex-extrastriate-occipital-cortex,V1C;ESOC,sea-ad-quantitative-neuropathology,"One folder covering two regions; slide masks are split into Primary-Visual and Higher-Order-Visual subregions."
